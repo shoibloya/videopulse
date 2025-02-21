@@ -33,15 +33,11 @@ export function KeywordsTable({ data }: { data: KeywordData[] }) {
             <TableRow className="bg-muted/50 hover:bg-muted/60">
               <TableHead className="font-semibold">Keyword</TableHead>
               <TableHead>Intent</TableHead>
-              <TableHead>SF</TableHead>
               <TableHead className="text-right">Volume</TableHead>
               <TableHead className="text-right">KD</TableHead>
-              <TableHead className="text-right">CPC</TableHead>
               <TableHead className="text-right">Traffic</TableHead>
-              <TableHead className="text-right">Paid</TableHead>
               <TableHead className="text-right">Position</TableHead>
               <TableHead>URL</TableHead>
-              <TableHead>Updated</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -53,7 +49,6 @@ export function KeywordsTable({ data }: { data: KeywordData[] }) {
                     {item.intent}
                   </span>
                 </TableCell>
-                <TableCell>{item.sf}</TableCell>
                 <TableCell className="text-right">{item.volume}</TableCell>
                 <TableCell className="text-right">
                   <span
@@ -64,9 +59,7 @@ export function KeywordsTable({ data }: { data: KeywordData[] }) {
                     {item.kd}
                   </span>
                 </TableCell>
-                <TableCell className="text-right">{item.cpc}</TableCell>
                 <TableCell className="text-right">{item.traffic}</TableCell>
-                <TableCell className="text-right">{item.paid}</TableCell>
                 <TableCell className="text-right">
                   <span
                     className={`rounded-full px-2 py-1 text-xs font-medium ${
@@ -90,7 +83,6 @@ export function KeywordsTable({ data }: { data: KeywordData[] }) {
                     {item.url}
                   </a>
                 </TableCell>
-                <TableCell className="text-muted-foreground">{item.updated}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -99,4 +91,3 @@ export function KeywordsTable({ data }: { data: KeywordData[] }) {
     </motion.div>
   )
 }
-
