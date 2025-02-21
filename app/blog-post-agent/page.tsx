@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, ChevronLeft, ChevronRight } from "lucide-react"
@@ -754,11 +754,13 @@ export default function Page() {
     if (e.key === "Escape") handleClose()
   }
 
-  // Add keyboard event listeners
-  useState(() => {
+ // Use `useEffect` to ensure this runs only on the client side
+ useEffect(() => {
+  if (typeof window !== "undefined") {
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [modalState.isOpen])
+  }
+}, [modalState.isOpen])
 
   return (
     <main className="container mx-auto py-8 px-4 md:px-6">
