@@ -6,8 +6,10 @@ import { motion } from "framer-motion"
 import { Clock, CheckCircle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button" // Importing Button from shadcn
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Agent } from "@/lib/agents"
+import Link from "next/link" // Importing Link for navigation
 
 export default function AgentsList() {
   const [agents, setAgents] = useState<Agent[]>([])
@@ -89,7 +91,13 @@ export default function AgentsList() {
                       )}
                     </div>
                   </CardHeader>
-                  <CardContent>{/* Additional content can be added here if needed */}</CardContent>
+                  <CardContent>
+                    {agent.type === "newpage" && agent.slug && (
+                      <Link href={agent.slug} target="_blank" passHref>
+                        <Button className="mt-4">Open</Button>
+                      </Link>
+                    )}
+                  </CardContent>
                 </Card>
               </motion.div>
             ))}
@@ -166,4 +174,3 @@ function AgentsListSkeleton() {
     </div>
   )
 }
-
