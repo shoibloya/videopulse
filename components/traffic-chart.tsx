@@ -13,6 +13,7 @@ import {
   Legend,
 } from "chart.js"
 import { Line } from "react-chartjs-2"
+import annotationPlugin from "chartjs-plugin-annotation"  // <-- Added import
 
 ChartJS.register(
   CategoryScale,
@@ -21,7 +22,8 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  annotationPlugin  // <-- Register the annotation plugin
 )
 
 interface TrafficRow {
@@ -86,6 +88,9 @@ export function TrafficChart() {
     (row) => Number(row[trafficColName]) || 0
   )
 
+  // Calculate the middle label for the annotation. Fallback to a default if no labels available.
+  const midLabel = labels.length ? labels[Math.floor(labels.length / 2)] : '2024-09-15'
+
   const chartData = {
     labels,
     datasets: [
@@ -111,6 +116,31 @@ export function TrafficChart() {
       legend: {
         position: "bottom" as const,
       },
+      // Annotation configuration with hover events for tooltip behavior
+      annotation: {
+        annotations: {
+          clientOnboard: {
+            type: 'line',
+            scaleID: 'x',
+            value: midLabel, // Now using the middle label value
+            borderColor: "rgba(255,105,180,1)", // Pinkish color
+            borderWidth: 2,
+            label: {
+              enabled: false, // Hide by default
+              content: "Client Onboarded",
+              position: "center"
+            },
+            onEnter: (context: any) => {
+              context.element.options.label.enabled = true
+              context.chart.update()
+            },
+            onLeave: (context: any) => {
+              context.element.options.label.enabled = false
+              context.chart.update()
+            }
+          }
+        }
+      }
     },
     scales: {
       x: {

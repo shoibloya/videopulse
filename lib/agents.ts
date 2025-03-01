@@ -15,34 +15,24 @@ export async function getAgents(): Promise<Agent[]> {
     {
       id: "onboarding",
       name: "Onboarding Agent",
-      purpose: "Onboard Tracework with Nuggt",
+      purpose: "Onboard StudyChat with Nuggt",
       status: "ready",
-      widgetId: "43iMiW9BUtXFmZBor2YG", // widget embed id
+      widgetId: "8Rhjcql8ubCbW3JbZfbk", // widget embed id
       type: "inplace", // Example type
     },
-
     {
-      id: "posthog",
-      name: "PostHog Agent",
-      purpose: "Connect posthog analytics for traffic data",
+      id: "tools",
+      name: "Tool Agent",
+      purpose: "Add a pomodoro timer",
       status: "ready",
-      type: "newpage", // Example type
-      slug: "/posthog-agent", // Example URL slug
+      widgetId: "CgUbMTZShN8R9uN404mU", // widget embed id
+      type: "newpage",
+      slug: "/tool" // Example type
     },
-    
     {
-      id: "blog",
-      name: "Blog Post Agent",
-      purpose: "Going through first blog post",
-      status: "ready",
-      type: "newpage", // Example type
-      slug: "/blog-post-agent", // Example URL slug
-    },
-
-    {
-      id: "how-to-queries",
-      name: "How To Queries Agent",
-      purpose: "Targeting How To Guides like 'How to login on monday.com'",
+      id: "blogs",
+      name: "blogs that StudyChat Can Rank for",
+      purpose: "Targeting blogs like best study tools",
       status: "upcoming",
       upcomingDate: "27th Feb",
       type: "inplace", // Example type
