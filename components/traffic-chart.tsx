@@ -117,30 +117,7 @@ export function TrafficChart() {
         position: "bottom" as const,
       },
       // Annotation configuration with hover events for tooltip behavior
-      annotation: {
-        annotations: {
-          clientOnboard: {
-            type: 'line',
-            scaleID: 'x',
-            value: midLabel, // Now using the middle label value
-            borderColor: "rgba(255,105,180,1)", // Pinkish color
-            borderWidth: 2,
-            label: {
-              enabled: false, // Hide by default
-              content: "Client Onboarded",
-              position: "center"
-            },
-            onEnter: (context: any) => {
-              context.element.options.label.enabled = true
-              context.chart.update()
-            },
-            onLeave: (context: any) => {
-              context.element.options.label.enabled = false
-              context.chart.update()
-            }
-          }
-        }
-      }
+      
     },
     scales: {
       x: {
