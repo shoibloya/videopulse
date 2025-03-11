@@ -43,9 +43,9 @@ export interface Task {
         title: "Internal Linking Inspection",
         description: "Linking pages properly and debugging slow website load time.",
         date: "2025-03-14T00:00:00Z",
-        colorIndex: 1,
+        colorIndex: 2,
         //location: "Zoom",
-        tags: ["Blog"],
+        tags: ["Technical"],
       },
     {
       id: 5,
