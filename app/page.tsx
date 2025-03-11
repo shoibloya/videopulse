@@ -9,6 +9,7 @@ import { TrafficChart } from "@/components/traffic-chart"
 import { Activity, Link2, Search, Share2, Users } from "lucide-react"
 import RealtimeGreeting from "@/components/RealtimeGreeting"
 import AgentsList from "@/components/AgentsList" // import your new component
+import TaskCalendar from "@/components/TaskCalendar";
 
 export default function DownloadPage() {
   // Example KPI data
@@ -65,6 +66,7 @@ export default function DownloadPage() {
         <TrafficChart />
         {/* Agents Section */}
         <AgentsList />
+        <TaskCalendar />
 
         {/* Content Below KPIs */}
         <div className="grid gap-8">

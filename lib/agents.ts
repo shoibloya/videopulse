@@ -22,10 +22,10 @@ export async function getAgents(): Promise<Agent[]> {
     },
     {
       id: "blogs",
-      name: "Blog Post Report",
-      purpose: "First blog post update",
+      name: "Week 1 Reporting Agent",
+      purpose: "Reports from first week 12th-17th March",
       status: "upcoming",
-      upcomingDate: "7th March",
+      upcomingDate: "17th March",
       type: "inplace", // Example type
     },
 
