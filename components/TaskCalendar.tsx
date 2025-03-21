@@ -1,328 +1,343 @@
 "use client"
 
-import type React from "react"
-import { useState } from "react"
-import { Card, CardHeader, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { useMemo, useState } from "react"
+import { Card, CardHeader, CardContent, CardFooter } from "@/components/ui/card"
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
-import { CalendarIcon, ChevronLeft, ChevronRight, Clock, MapPin } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
+import { CalendarIcon, MapPin, Tag, Clock, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react"
 import { tasks as importedTasks, type Task as TaskType } from "@/lib/tasks"
 import { cn } from "@/lib/utils"
+import { motion } from "framer-motion"
 
-interface CalendarDay {
-  date: Date
-  currentMonth: boolean
-  isToday: boolean
-}
+export default function TaskListView() {
+  const TASKS_PER_PAGE = 4
+  const [currentPage, setCurrentPage] = useState(1)
 
-export default function TaskCalendar() {
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const [selectedTask, setSelectedTask] = useState<TaskType | null>(null)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  // Calculate total pages
+  const totalTasks = importedTasks.length
+  const totalPages = Math.ceil(totalTasks / TASKS_PER_PAGE)
 
-  // Define color options with a refined palette
-  const colorOptions = [
-    { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700", dot: "bg-blue-500" },
-    { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", dot: "bg-emerald-500" },
-    { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", dot: "bg-amber-500" },
-    { bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-700", dot: "bg-rose-500" },
-    { bg: "bg-violet-50", border: "border-violet-200", text: "text-violet-700", dot: "bg-violet-500" },
-    { bg: "bg-cyan-50", border: "border-cyan-200", text: "text-cyan-700", dot: "bg-cyan-500" },
-  ]
+  // Get current page tasks
+  const currentTasks = useMemo(() => {
+    const startIndex = (currentPage - 1) * TASKS_PER_PAGE
+    return [...importedTasks]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(startIndex, startIndex + TASKS_PER_PAGE)
+  }, [currentPage])
 
-  // Navigate to previous month
-  const goToPreviousMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))
-  }
-
-  // Navigate to next month
-  const goToNextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))
-  }
-
-  // Navigate to current month
-  const goToCurrentMonth = () => {
-    setCurrentDate(new Date())
-  }
-
-  // Helper to check if two dates are the same day
-  const isSameDay = (date1: Date, date2: Date) => {
-    return (
-      date1.getDate() === date2.getDate() &&
-      date1.getMonth() === date2.getMonth() &&
-      date1.getFullYear() === date2.getFullYear()
-    )
-  }
-
-  // Generate calendar days, including days from adjacent months to fill the grid
-  const generateCalendarDays = (date: Date): CalendarDay[] => {
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    const firstDayOfMonth = new Date(year, month, 1)
-    const lastDayOfMonth = new Date(year, month + 1, 0)
-    const daysInMonth = lastDayOfMonth.getDate()
-    const startDay = firstDayOfMonth.getDay() // 0 (Sun) to 6 (Sat)
-    const calendarDays: CalendarDay[] = []
-    const today = new Date()
-
-    // Previous month days (if needed)
-    if (startDay > 0) {
-      const prevMonthLastDay = new Date(year, month, 0).getDate()
-      for (let i = startDay - 1; i >= 0; i--) {
-        const date = new Date(year, month - 1, prevMonthLastDay - i)
-        calendarDays.push({
-          date,
-          currentMonth: false,
-          isToday: isSameDay(date, today),
-        })
-      }
-    }
-
-    // Current month days
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day)
-      calendarDays.push({
-        date,
-        currentMonth: true,
-        isToday: isSameDay(date, today),
-      })
-    }
-
-    // Next month days (to complete the week grid)
-    const remainder = calendarDays.length % 7
-    if (remainder > 0) {
-      const cellsToAdd = 7 - remainder
-      for (let i = 1; i <= cellsToAdd; i++) {
-        const date = new Date(year, month + 1, i)
-        calendarDays.push({
-          date,
-          currentMonth: false,
-          isToday: isSameDay(date, today),
-        })
-      }
-    }
-    return calendarDays
-  }
-
-  const calendarDays = generateCalendarDays(currentDate)
-
-  // When a task is clicked, set it as the selected task and open the dialog
-  const handleTaskClick = (task: TaskType, e: React.MouseEvent) => {
-    e.stopPropagation()
-    setSelectedTask(task)
-    setIsDialogOpen(true)
-  }
-
-  // Format time from date string
-  const formatTime = (dateString: string) => {
+  // Format date for grouping
+  const formatDateKey = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  }
-
-  // Get tasks for a given day
-  const getDayTasks = (dayObj: CalendarDay) => {
-    return importedTasks.filter((task) => {
-      const taskDate = new Date(task.date)
-      return isSameDay(taskDate, dayObj.date)
+    return date.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     })
   }
 
-  // CSS for hiding scrollbars (since we can't use globals.css)
-  const scrollbarHideStyle = {
-    msOverflowStyle: "none",
-    scrollbarWidth: "none",
-    "&::-webkit-scrollbar": { display: "none" },
-  } as React.CSSProperties
+  // Calculate completion statistics
+  const stats = useMemo(() => {
+    const completedTasks = importedTasks.filter((task) => task.completed).length
+    const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+
+    return {
+      total: totalTasks,
+      completed: completedTasks,
+      percentage: completionPercentage,
+    }
+  }, [totalTasks])
+
+  // Group tasks by date
+  const groupedTasks = useMemo(() => {
+    // Group by date
+    const grouped = currentTasks.reduce<Record<string, TaskType[]>>((acc, task) => {
+      const dateKey = formatDateKey(task.date)
+      if (!acc[dateKey]) {
+        acc[dateKey] = []
+      }
+      acc[dateKey].push(task)
+      return acc
+    }, {})
+
+    return grouped
+  }, [currentTasks])
+
+  // Handle pagination
+  const goToNextPage = () => {
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+  }
+
+  const goToPrevPage = () => {
+    setCurrentPage((prev) => Math.max(prev - 1, 1))
+  }
+
+  // Define color options with a refined palette
+  const colorOptions = [
+    {
+      bg: "bg-blue-50 dark:bg-blue-950/40",
+      border: "border-blue-200 dark:border-blue-800",
+      text: "text-blue-700 dark:text-blue-300",
+      dot: "bg-blue-500",
+    },
+    {
+      bg: "bg-emerald-50 dark:bg-emerald-950/40",
+      border: "border-emerald-200 dark:border-emerald-800",
+      text: "text-emerald-700 dark:text-emerald-300",
+      dot: "bg-emerald-500",
+    },
+    {
+      bg: "bg-amber-50 dark:bg-amber-950/40",
+      border: "border-amber-200 dark:border-amber-800",
+      text: "text-amber-700 dark:text-amber-300",
+      dot: "bg-amber-500",
+    },
+    {
+      bg: "bg-rose-50 dark:bg-rose-950/40",
+      border: "border-rose-200 dark:border-rose-800",
+      text: "text-rose-700 dark:text-rose-300",
+      dot: "bg-rose-500",
+    },
+    {
+      bg: "bg-violet-50 dark:bg-violet-950/40",
+      border: "border-violet-200 dark:border-violet-800",
+      text: "text-violet-700 dark:text-violet-300",
+      dot: "bg-violet-500",
+    },
+    {
+      bg: "bg-cyan-50 dark:bg-cyan-950/40",
+      border: "border-cyan-200 dark:border-cyan-800",
+      text: "text-cyan-700 dark:text-cyan-300",
+      dot: "bg-cyan-500",
+    },
+  ]
+
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString(undefined, {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })
+  }
 
   return (
-    <Card className="shadow-lg border-0 overflow-hidden">
-      <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 pb-8 pt-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5 text-primary" />
-            <h2 className="text-xl font-bold tracking-tight">Task Calendar</h2>
+    <Card className="shadow-xl border-0 overflow-hidden bg-white dark:bg-gray-950 w-full max-w-5xl mx-auto">
+      {/* Header */}
+      <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 p-6">
+        <div className="flex flex-col space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5 text-primary" />
+              <h2 className="text-xl font-bold tracking-tight">Task List</h2>
+            </div>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-medium">
+                {stats.completed}/{stats.total} completed
+              </span>
+              <span className="text-muted-foreground">({stats.percentage}%)</span>
+            </div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={goToCurrentMonth}
-            className="text-xs bg-background/80 backdrop-blur-sm"
-          >
-            Today
-          </Button>
-        </div>
-        <div className="flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={goToPreviousMonth}
-            className="rounded-full hover:bg-background/80 transition-colors"
-          >
-            <ChevronLeft className="h-5 w-5" />
-            <span className="sr-only">Previous month</span>
-          </Button>
-          <h3 className="text-2xl font-bold">
-            {currentDate.toLocaleString("default", { month: "long", year: "numeric" })}
-          </h3>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={goToNextMonth}
-            className="rounded-full hover:bg-background/80 transition-colors"
-          >
-            <ChevronRight className="h-5 w-5" />
-            <span className="sr-only">Next month</span>
-          </Button>
+
+          {/* Progress bar */}
+          <div className="w-full">
+            <Progress value={stats.percentage} className="h-2" />
+          </div>
         </div>
       </CardHeader>
-      <CardContent className="p-4">
-        {/* Weekday Headers */}
-        <div className="grid grid-cols-7 text-center mb-4">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, index) => (
-            <div
-              key={day}
-              className={cn("font-medium text-sm py-2", (index === 0 || index === 6) && "text-muted-foreground")}
-            >
-              {day}
-            </div>
-          ))}
-        </div>
-        {/* Calendar Grid */}
-        <div className="grid grid-cols-7 gap-1 md:gap-2">
-          {calendarDays.map((dayObj, index) => {
-            const dayTasks = getDayTasks(dayObj)
-            const isWeekend = dayObj.date.getDay() === 0 || dayObj.date.getDay() === 6
 
-            return (
-              <div
-                key={index}
-                className={cn(
-                  "border rounded-lg p-1 md:p-2 h-28 md:h-36 flex flex-col transition-all duration-200",
-                  dayObj.currentMonth ? "bg-card" : "bg-muted/30 text-muted-foreground",
-                  dayObj.isToday && "ring-2 ring-primary ring-offset-2",
-                  isWeekend && dayObj.currentMonth && "bg-muted/10"
-                )}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <div
-                    className={cn(
-                      "flex items-center justify-center w-6 h-6 text-xs font-medium rounded-full",
-                      dayObj.isToday && "bg-primary text-primary-foreground",
-                      !dayObj.isToday && "text-foreground"
-                    )}
-                  >
-                    {dayObj.date.getDate()}
+      {/* List Content */}
+      <CardContent className="p-6 pt-3">
+        <div className="relative min-h-[400px] flex flex-col">
+          {/* Vertical progress line */}
+          <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-muted z-0"></div>
+
+          <div className="flex-1">
+            {Object.entries(groupedTasks).map(([dateKey, dateTasks]) => (
+              <div key={dateKey} className="mb-6 last:mb-0 relative">
+                <div className="flex items-center mb-2">
+                  <div className="flex-1 h-px bg-border" />
+                  <div className="px-4 py-1 rounded-full bg-muted text-sm font-medium flex items-center gap-2">
+                    <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>{dateKey}</span>
                   </div>
-                  {dayTasks.length > 0 && (
-                    <Badge variant="outline" className="text-[10px] h-4 px-1 bg-background/80">
-                      {dayTasks.length}
-                    </Badge>
-                  )}
+                  <div className="flex-1 h-px bg-border" />
                 </div>
-                <div className="flex-1 overflow-y-auto space-y-1" style={scrollbarHideStyle}>
-                  {dayTasks.slice(0, 3).map((task) => {
-                    // Use the task's colorIndex if provided; otherwise, fall back to a default based on task id.
+
+                <Accordion type="multiple" className="space-y-3 pl-6">
+                  {dateTasks.map((task) => {
                     const colorIndex =
                       typeof task.colorIndex !== "undefined"
                         ? task.colorIndex % colorOptions.length
                         : (task.id - 1) % colorOptions.length
                     const colorClass = colorOptions[colorIndex]
+                    const isCompleted = task.completed
 
                     return (
-                      <div
+                      <motion.div
                         key={task.id}
-                        onClick={(e) => handleTaskClick(task, e)}
-                        className={cn(
-                          "cursor-pointer text-xs p-1 rounded-md border transition-all",
-                          colorClass.bg,
-                          colorClass.border,
-                          colorClass.text,
-                          "hover:shadow-sm hover:translate-y-[-1px]"
-                        )}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="relative"
                       >
-                        <div className="flex items-center gap-1">
-                          <div className={cn("w-1.5 h-1.5 rounded-full", colorClass.dot)} />
-                          <span className="font-medium truncate">{task.title}</span>
+                        {/* Task completion marker */}
+                        <div
+                          className={cn(
+                            "absolute left-0 w-6 h-6 rounded-full -translate-x-[19px] z-10 flex items-center justify-center",
+                            isCompleted ? "bg-primary" : "bg-muted border-2 border-border",
+                          )}
+                        >
+                          {isCompleted && <CheckCircle2 className="h-4 w-4 text-primary-foreground" />}
                         </div>
-                        <div className="text-[10px] mt-0.5 opacity-80 flex items-center">
-                          <Clock className="w-2.5 h-2.5 mr-0.5" />
-                          {formatTime(task.date)}
-                        </div>
-                      </div>
+
+                        <AccordionItem value={String(task.id)} className="border-0">
+                          {/* Collapsed Task Summary */}
+                          <div
+                            className={cn(
+                              "flex items-center gap-3 px-6 py-4 rounded-lg border transition-all",
+                              isCompleted ? "bg-muted/30 border-muted" : "hover:border-primary/30 hover:shadow-sm",
+                            )}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <div className={cn("w-2 h-2 rounded-full", colorClass.dot)} />
+                                <span
+                                  className={cn(
+                                    "font-medium truncate",
+                                    isCompleted && "line-through text-muted-foreground",
+                                  )}
+                                >
+                                  {task.title}
+                                </span>
+                              </div>
+
+                              <div className="mt-1 text-xs text-muted-foreground flex items-center gap-2">
+                                <Clock className="h-3 w-3" />
+                                <span>{new Date(task.date).toLocaleDateString()}</span>
+
+                                {task.tags && task.tags.length > 0 && (
+                                  <>
+                                    <span>•</span>
+                                    <div className="flex items-center gap-1">
+                                      <Tag className="h-3 w-3" />
+                                      <span>{task.tags.length} tags</span>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            <AccordionTrigger className="p-0 hover:no-underline" />
+                          </div>
+
+                          {/* Expanded Task Details */}
+                          <AccordionContent>
+                            <div
+                              className={cn(
+                                "p-6 mt-2 rounded-lg border",
+                                colorClass.bg,
+                                colorClass.border,
+                                colorClass.text,
+                              )}
+                            >
+                              <p className="mb-4 text-sm leading-relaxed">{task.description}</p>
+
+                              <div className="space-y-2">
+                                <div className="text-sm flex items-center gap-2">
+                                  <CalendarIcon className="w-4 h-4 opacity-70" />
+                                  <span>{formatDate(task.date)}</span>
+                                </div>
+
+                                {task.location && (
+                                  <div className="text-sm flex items-center gap-2">
+                                    <MapPin className="w-4 h-4 opacity-70" />
+                                    <span>{task.location}</span>
+                                  </div>
+                                )}
+
+                                {task.tags && task.tags.length > 0 && (
+                                  <div className="flex flex-wrap gap-1.5 pt-3">
+                                    {task.tags.map((tag, index) => (
+                                      <Badge key={index} variant="secondary" className="text-xs">
+                                        {tag}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <div className="pt-2 text-sm">
+                                  <span className="font-medium">Status: </span>
+                                  <span>{isCompleted ? "Completed" : "Pending"}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      </motion.div>
                     )
                   })}
-                  {dayTasks.length > 3 && (
-                    <div className="text-[10px] text-muted-foreground px-1">+{dayTasks.length - 3} more</div>
-                  )}
-                </div>
+                </Accordion>
               </div>
-            )
-          })}
+            ))}
+
+            {/* Empty state when no tasks on current page */}
+            {Object.keys(groupedTasks).length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="bg-muted rounded-full p-3 mb-4">
+                  <CalendarIcon className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-medium mb-1">No tasks on this page</h3>
+                <p className="text-muted-foreground text-sm max-w-md">
+                  Try navigating to a different page to view more tasks.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Pagination controls */}
+          <div className="flex items-center justify-between mt-6 pt-4 border-t">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToPrevPage}
+              disabled={currentPage === 1}
+              className="flex items-center gap-1"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Button>
+
+            <span className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </span>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-1"
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardContent>
 
-      {/* Task Details Dialog */}
-      <Dialog
-        open={isDialogOpen}
-        onOpenChange={(open) => {
-          setIsDialogOpen(open)
-          if (!open) {
-            setSelectedTask(null)
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-xl">{selectedTask?.title}</DialogTitle>
-          </DialogHeader>
-          {selectedTask && (
-            <div className="py-4 space-y-4">
-              <div className="bg-muted/30 p-4 rounded-lg">
-                <p className="text-sm leading-relaxed">{selectedTask.description}</p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Clock className="w-4 h-4 mr-2" />
-                  <span>
-                    {new Date(selectedTask.date).toLocaleDateString(undefined, {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}{" "}
-                    at {formatTime(selectedTask.date)}
-                  </span>
-                </div>
-
-                {selectedTask.location && (
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <MapPin className="w-4 h-4 mr-2" />
-                    <span>{selectedTask.location}</span>
-                  </div>
-                )}
-              </div>
-
-              {selectedTask.tags && selectedTask.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 pt-2">
-                  {selectedTask.tags.map((tag, index) => (
-                    <Badge key={index} variant="secondary" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          <DialogFooter className="sm:justify-between">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Close
-            </Button>
-            
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CardFooter className="border-t p-4 text-sm text-muted-foreground flex justify-between">
+        <div>
+          Showing {Math.min(TASKS_PER_PAGE, currentTasks.length)} of {stats.total} tasks
+        </div>
+        <div>
+          {stats.completed} completed, {stats.total - stats.completed} pending
+        </div>
+      </CardFooter>
     </Card>
   )
 }
+

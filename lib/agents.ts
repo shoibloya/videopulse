@@ -15,17 +15,17 @@ export async function getAgents(): Promise<Agent[]> {
     {
       id: "onboarding",
       name: "Onboarding Agent",
-      purpose: "Onboard Ladon Translation with Nuggt",
+      purpose: "Onboard Coco Pixels with Nuggt",
       status: "ready",
-      widgetId: "85QTYmLq1yvusZoTlFZD", // widget embed id
+      widgetId: "D1qdaBBDlMtTjeiTwOFy", // widget embed id
       type: "inplace", // Example type
     },
     {
-      id: "blogs",
-      name: "Week 1 Reporting Agent",
-      purpose: "Reports from first week 12th-17th March",
+      id: "monthly",
+      name: "Monthly Reporting Agent (March-April)",
+      purpose: "Reports from first month of subscription",
       status: "upcoming",
-      upcomingDate: "17th March",
+      upcomingDate: "16th March",
       type: "inplace", // Example type
     },
 
