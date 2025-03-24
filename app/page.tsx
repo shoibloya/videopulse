@@ -4,24 +4,23 @@ import { motion } from "framer-motion"
 import { KpiCard } from "@/components/kpi-card"
 import { KeywordsTable } from "@/components/keywords-table"
 import { BacklinksTable } from "@/components/backlinks-table"
-import { Activity, Link2, Search, Share2, Users, Calendar, Bot } from "lucide-react"
+import { Activity, Link2, Search, Share2, Users } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardHeader, CardContent } from "@/components/ui/card"
 import AgentsList from "@/components/AgentsList"
 import TaskCalendar from "@/components/TaskCalendar"
+import TrafficGraph from "@/components/TrafficGraph"
+import TrafficBlocks from "@/components/TrafficBlocks"
 
 export default function Dashboard() {
   // Example KPI data
   const kpiData = [
-    { title: "DR", value: 0, icon: <Activity className="h-4 w-4" /> },
-    { title: "UR", value: 6, icon: <Users className="h-4 w-4" /> },
-    { title: "Backlinks", value: 16, icon: <Link2 className="h-4 w-4" /> },
-    { title: "Ref. Domains", value: 15, icon: <Share2 className="h-4 w-4" /> },
-    { title: "Organic Traffic", value: 0, icon: <Search className="h-4 w-4" /> },
+    { title: "DR", value: 25, icon: <Activity className="h-4 w-4" /> },
+    { title: "UR", value: 22, icon: <Users className="h-4 w-4" /> },
+    { title: "Backlinks", value: 868, icon: <Link2 className="h-4 w-4" /> },
+    { title: "Ref. Domains", value: 179, icon: <Share2 className="h-4 w-4" /> },
+    { title: "Organic Traffic", value: 107, icon: <Search className="h-4 w-4" /> },
   ]
-
-  // Hard-coded keywords data
-  const keywordsData = []
 
   // Animation variants for staggered animations
   const containerVariants = {
@@ -41,6 +40,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background/95 to-primary/5">
+      {/* Header & KPI Cards Section */}
       <div className="container mx-auto flex flex-col space-y-8 px-4 py-8 md:px-6 lg:px-8">
         {/* Dashboard Title */}
         <div className="flex flex-col gap-2 text-center">
@@ -54,7 +54,7 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-3xl font-bold tracking-tight text-transparent md:text-4xl"
           >
-            Coco Pixels Dashboard
+            Cloudsine Dashboard
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: -20 }}
@@ -79,34 +79,63 @@ export default function Dashboard() {
             </motion.div>
           ))}
         </motion.div>
+      </div>
 
-        {/* Task List and Agents Section */}
+      <hr className="my-8 border-t border-gray-300" />
+
+      {/* Organic Traffic Target Section */}
+      <div className="container mx-auto px-4 py-8">
+        <h2 className="text-2xl font-bold mb-4">Organic Traffic Target [Tentative]</h2>
+        <div className="flex flex-col md:flex-row gap-8">
+          {/* Left Column: Traffic Graph */}
+          <div className="flex-1">
+            <TrafficGraph />
+          </div>
+          {/* Right Column: Traffic Blocks */}
+          <div className="w-full md:w-1/3">
+            <TrafficBlocks />
+          </div>
+        </div>
+      </div>
+
+      <hr className="my-8 border-t border-gray-300" />
+
+      {/* Task Calendar & Agents Section */}
+      <div className="container mx-auto flex flex-col space-y-8 px-4 py-8 md:px-6 lg:px-8">
+        <h2 className="text-2xl font-bold">Task Calendar & Agents</h2>
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
           className="grid grid-cols-1 gap-6 lg:grid-cols-2"
         >
-          {/* Task List */}
+          {/* Task Calendar */}
           <motion.div variants={itemVariants}>
-          <TaskCalendar />
-           
+            <TaskCalendar />
           </motion.div>
 
           {/* Agents List */}
           <motion.div variants={itemVariants}>
             <Card className="overflow-hidden border bg-card/50 shadow-md backdrop-blur-sm">
-              
               <CardContent className="p-4">
                 <AgentsList />
               </CardContent>
             </Card>
           </motion.div>
         </motion.div>
+      </div>
 
-        {/* Content Below */}
-        <motion.div variants={containerVariants} initial="hidden" animate="visible" className="grid gap-6">
-          {/* Keywords and Backlinks Tabs */}
+      <hr className="my-8 border-t border-gray-300" />
+
+      {/* SEO Metrics Section */}
+      <div className="container mx-auto flex flex-col space-y-8 px-4 py-8 md:px-6 lg:px-8">
+        <h2 className="text-2xl font-bold">SEO Metrics</h2>
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="grid gap-6"
+        >
           <motion.div variants={itemVariants}>
             <Tabs defaultValue="keywords">
               <Card className="border bg-card/50 shadow-md backdrop-blur-sm">
@@ -124,17 +153,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent className="p-4">
                   <TabsContent value="keywords" className="mt-0">
-                    {keywordsData.length > 0 ? (
-                      <KeywordsTable data={keywordsData} />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-muted-foreground/20 bg-muted/10 p-10 text-center">
-                        <Search className="mb-2 h-10 w-10 text-muted-foreground/60" />
-                        <h3 className="mb-2 text-lg font-medium">No keyword data available</h3>
-                        <p className="text-sm text-muted-foreground">
-                          We'll add keyword data as we start tracking your target search terms.
-                        </p>
-                      </div>
-                    )}
+                    <KeywordsTable />
                   </TabsContent>
                   <TabsContent value="backlinks" className="mt-0">
                     <BacklinksTable />
@@ -148,4 +167,3 @@ export default function Dashboard() {
     </div>
   )
 }
-

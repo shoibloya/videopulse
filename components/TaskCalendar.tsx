@@ -6,14 +6,15 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { CalendarIcon, MapPin, Tag, Clock, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react"
+import { CalendarIcon, MapPin, Tag, Clock, CheckCircle2, ChevronLeft, ChevronRight, CheckCheck, Calendar, ListTodo } from 'lucide-react'
 import { tasks as importedTasks, type Task as TaskType } from "@/lib/tasks"
 import { cn } from "@/lib/utils"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 
 export default function TaskListView() {
   const TASKS_PER_PAGE = 4
   const [currentPage, setCurrentPage] = useState(1)
+  const [expandedTasks, setExpandedTasks] = useState<string[]>([])
 
   // Calculate total pages
   const totalTasks = importedTasks.length
@@ -67,10 +68,21 @@ export default function TaskListView() {
   // Handle pagination
   const goToNextPage = () => {
     setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+    setExpandedTasks([]) // Reset expanded state on page change
   }
 
   const goToPrevPage = () => {
     setCurrentPage((prev) => Math.max(prev - 1, 1))
+    setExpandedTasks([]) // Reset expanded state on page change
+  }
+
+  // Toggle task expansion
+  const toggleTask = (taskId: string) => {
+    setExpandedTasks(prev => 
+      prev.includes(taskId) 
+        ? prev.filter(id => id !== taskId)
+        : [...prev, taskId]
+    )
   }
 
   // Define color options with a refined palette
@@ -125,19 +137,24 @@ export default function TaskListView() {
   }
 
   return (
-    <Card className="shadow-xl border-0 overflow-hidden bg-white dark:bg-gray-950 w-full max-w-5xl mx-auto">
+    <Card className="shadow-xl border-0 overflow-hidden bg-gradient-to-br from-background to-background/95 w-full max-w-5xl mx-auto">
       {/* Header */}
       <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5 p-6">
         <div className="flex flex-col space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CalendarIcon className="h-5 w-5 text-primary" />
+              <div className="bg-primary/10 p-1.5 rounded-full">
+                <ListTodo className="h-4 w-4 text-primary" />
+              </div>
               <h2 className="text-xl font-bold tracking-tight">Task List</h2>
             </div>
             <div className="flex items-center gap-2 text-sm">
-              <span className="font-medium">
-                {stats.completed}/{stats.total} completed
-              </span>
+              <div className="flex items-center gap-1.5">
+                <CheckCheck className="h-4 w-4 text-primary" />
+                <span className="font-medium">
+                  {stats.completed}/{stats.total} completed
+                </span>
+              </div>
               <span className="text-muted-foreground">({stats.percentage}%)</span>
             </div>
           </div>
@@ -153,7 +170,7 @@ export default function TaskListView() {
       <CardContent className="p-6 pt-3">
         <div className="relative min-h-[400px] flex flex-col">
           {/* Vertical progress line */}
-          <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-muted z-0"></div>
+          <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-gradient-to-b from-primary/30 via-muted to-muted z-0"></div>
 
           <div className="flex-1">
             {Object.entries(groupedTasks).map(([dateKey, dateTasks]) => (
@@ -161,13 +178,13 @@ export default function TaskListView() {
                 <div className="flex items-center mb-2">
                   <div className="flex-1 h-px bg-border" />
                   <div className="px-4 py-1 rounded-full bg-muted text-sm font-medium flex items-center gap-2">
-                    <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Calendar className="h-3.5 w-3.5 text-primary" />
                     <span>{dateKey}</span>
                   </div>
                   <div className="flex-1 h-px bg-border" />
                 </div>
 
-                <Accordion type="multiple" className="space-y-3 pl-6">
+                <div className="space-y-3 pl-6">
                   {dateTasks.map((task) => {
                     const colorIndex =
                       typeof task.colorIndex !== "undefined"
@@ -175,6 +192,7 @@ export default function TaskListView() {
                         : (task.id - 1) % colorOptions.length
                     const colorClass = colorOptions[colorIndex]
                     const isCompleted = task.completed
+                    const isExpanded = expandedTasks.includes(String(task.id))
 
                     return (
                       <motion.div
@@ -187,19 +205,26 @@ export default function TaskListView() {
                         {/* Task completion marker */}
                         <div
                           className={cn(
-                            "absolute left-0 w-6 h-6 rounded-full -translate-x-[19px] z-10 flex items-center justify-center",
-                            isCompleted ? "bg-primary" : "bg-muted border-2 border-border",
+                            "absolute left-0 w-6 h-6 rounded-full -translate-x-[19px] z-10 flex items-center justify-center transition-colors",
+                            isCompleted 
+                              ? "bg-primary shadow-sm" 
+                              : "bg-muted border-2 border-border hover:border-primary/50",
                           )}
                         >
                           {isCompleted && <CheckCircle2 className="h-4 w-4 text-primary-foreground" />}
                         </div>
 
-                        <AccordionItem value={String(task.id)} className="border-0">
+                        {/* Task Card */}
+                        <div className="group">
                           {/* Collapsed Task Summary */}
                           <div
+                            onClick={() => toggleTask(String(task.id))}
                             className={cn(
-                              "flex items-center gap-3 px-6 py-4 rounded-lg border transition-all",
-                              isCompleted ? "bg-muted/30 border-muted" : "hover:border-primary/30 hover:shadow-sm",
+                              "flex items-center gap-3 px-6 py-4 rounded-lg border transition-all cursor-pointer",
+                              isCompleted 
+                                ? "bg-muted/30 border-muted" 
+                                : "hover:border-primary/30 hover:shadow-sm",
+                              isExpanded && "border-primary/30 shadow-sm"
                             )}
                           >
                             <div className="flex-1 min-w-0">
@@ -231,56 +256,71 @@ export default function TaskListView() {
                               </div>
                             </div>
 
-                            <AccordionTrigger className="p-0 hover:no-underline" />
+                            <div className="flex items-center">
+                              <ChevronRight className={cn(
+                                "h-5 w-5 text-muted-foreground transition-transform",
+                                isExpanded && "rotate-90"
+                              )} />
+                            </div>
                           </div>
 
                           {/* Expanded Task Details */}
-                          <AccordionContent>
-                            <div
-                              className={cn(
-                                "p-6 mt-2 rounded-lg border",
-                                colorClass.bg,
-                                colorClass.border,
-                                colorClass.text,
-                              )}
-                            >
-                              <p className="mb-4 text-sm leading-relaxed">{task.description}</p>
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="overflow-hidden"
+                              >
+                                <div
+                                  className={cn(
+                                    "p-6 mt-2 rounded-lg border",
+                                    colorClass.bg,
+                                    colorClass.border,
+                                    colorClass.text,
+                                  )}
+                                >
+                                  <p className="mb-4 text-sm leading-relaxed">{task.description}</p>
 
-                              <div className="space-y-2">
-                                <div className="text-sm flex items-center gap-2">
-                                  <CalendarIcon className="w-4 h-4 opacity-70" />
-                                  <span>{formatDate(task.date)}</span>
-                                </div>
+                                  <div className="space-y-2">
+                                    <div className="text-sm flex items-center gap-2">
+                                      <CalendarIcon className="w-4 h-4 opacity-70" />
+                                      <span>{formatDate(task.date)}</span>
+                                    </div>
 
-                                {task.location && (
-                                  <div className="text-sm flex items-center gap-2">
-                                    <MapPin className="w-4 h-4 opacity-70" />
-                                    <span>{task.location}</span>
+                                    {task.location && (
+                                      <div className="text-sm flex items-center gap-2">
+                                        <MapPin className="w-4 h-4 opacity-70" />
+                                        <span>{task.location}</span>
+                                      </div>
+                                    )}
+
+                                    {task.tags && task.tags.length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5 pt-3">
+                                        {task.tags.map((tag, index) => (
+                                          <Badge key={index} variant="secondary" className="text-xs">
+                                            {tag}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    <div className="pt-2 text-sm">
+                                      <span className="font-medium">Status: </span>
+                                      <span>{isCompleted ? "Completed" : "Pending"}</span>
+                                    </div>
                                   </div>
-                                )}
-
-                                {task.tags && task.tags.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5 pt-3">
-                                    {task.tags.map((tag, index) => (
-                                      <Badge key={index} variant="secondary" className="text-xs">
-                                        {tag}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )}
-
-                                <div className="pt-2 text-sm">
-                                  <span className="font-medium">Status: </span>
-                                  <span>{isCompleted ? "Completed" : "Pending"}</span>
                                 </div>
-                              </div>
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                       </motion.div>
                     )
                   })}
-                </Accordion>
+                </div>
               </div>
             ))}
 
@@ -305,9 +345,9 @@ export default function TaskListView() {
               size="sm"
               onClick={goToPrevPage}
               disabled={currentPage === 1}
-              className="flex items-center gap-1"
+              className="flex items-center gap-1 group"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
               Previous
             </Button>
 
@@ -320,16 +360,16 @@ export default function TaskListView() {
               size="sm"
               onClick={goToNextPage}
               disabled={currentPage === totalPages}
-              className="flex items-center gap-1"
+              className="flex items-center gap-1 group"
             >
               Next
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Button>
           </div>
         </div>
       </CardContent>
 
-      <CardFooter className="border-t p-4 text-sm text-muted-foreground flex justify-between">
+      <CardFooter className="border-t p-4 text-sm text-muted-foreground flex justify-between bg-muted/10">
         <div>
           Showing {Math.min(TASKS_PER_PAGE, currentTasks.length)} of {stats.total} tasks
         </div>
@@ -340,4 +380,3 @@ export default function TaskListView() {
     </Card>
   )
 }
-

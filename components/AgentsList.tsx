@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import Script from "next/script"
 import { motion, AnimatePresence, useInView } from "framer-motion"
-import { Clock, CheckCircle, AlertCircle, ChevronRight, Sparkles, Bot, Calendar, RefreshCw, Loader2 } from 'lucide-react'
+import { Clock, CheckCircle, AlertCircle, ChevronRight, Sparkles, Bot, Calendar, RefreshCw, Loader2, Star, MessageSquare, Zap, FileText, Database, Code, Lightbulb } from 'lucide-react'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -15,13 +15,41 @@ import Link from "next/link"
 
 // Agent type categories with colors
 const AGENT_TYPES = {
-  "ai-assistant": { label: "AI Assistant", color: "bg-blue-500" },
-  "data-analyzer": { label: "Data Analyzer", color: "bg-purple-500" },
-  "content-creator": { label: "Content Creator", color: "bg-pink-500" },
-  "research": { label: "Research", color: "bg-amber-500" },
-  "automation": { label: "Automation", color: "bg-emerald-500" },
-  "newpage": { label: "Interactive", color: "bg-cyan-500" },
-  "default": { label: "Agent", color: "bg-slate-500" }
+  "ai-assistant": { 
+    label: "AI Assistant", 
+    color: "bg-blue-500",
+    icon: <MessageSquare className="h-3.5 w-3.5" />
+  },
+  "data-analyzer": { 
+    label: "Data Analyzer", 
+    color: "bg-purple-500",
+    icon: <Database className="h-3.5 w-3.5" />
+  },
+  "content-creator": { 
+    label: "Content Creator", 
+    color: "bg-pink-500",
+    icon: <FileText className="h-3.5 w-3.5" />
+  },
+  "research": { 
+    label: "Research", 
+    color: "bg-amber-500",
+    icon: <Lightbulb className="h-3.5 w-3.5" />
+  },
+  "automation": { 
+    label: "Automation", 
+    color: "bg-emerald-500",
+    icon: <Zap className="h-3.5 w-3.5" />
+  },
+  "newpage": { 
+    label: "Interactive", 
+    color: "bg-cyan-500",
+    icon: <Code className="h-3.5 w-3.5" />
+  },
+  "default": { 
+    label: "Agent", 
+    color: "bg-slate-500",
+    icon: <Bot className="h-3.5 w-3.5" />
+  }
 };
 
 export default function AgentsList() {
@@ -88,7 +116,9 @@ export default function AgentsList() {
       {/* Header with refresh button */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Bot className="h-5 w-5 text-primary" />
+          <div className="bg-primary/10 p-1.5 rounded-full">
+            <Bot className="h-5 w-5 text-primary" />
+          </div>
           <h2 className="text-xl font-bold tracking-tight">AI Agents</h2>
           <Badge variant="outline" className="ml-2 font-normal">
             {agents.length} total
@@ -103,11 +133,16 @@ export default function AgentsList() {
                 size="icon" 
                 onClick={refreshAgents}
                 disabled={loading || isRefreshing}
+                className="relative overflow-hidden"
               >
                 {isRefreshing ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <RefreshCw className="h-4 w-4" />
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    {/* Ripple effect on hover */}
+                    <span className="absolute inset-0 bg-primary/10 opacity-0 transition-opacity hover:opacity-100 rounded-md" />
+                  </>
                 )}
               </Button>
             </TooltipTrigger>
@@ -118,7 +153,11 @@ export default function AgentsList() {
 
       {/* Error state */}
       {error && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-lg border border-destructive/50 bg-destructive/10 p-4"
+        >
           <div className="flex items-center gap-2 text-destructive">
             <AlertCircle className="h-5 w-5" />
             <p className="font-medium">Failed to load agents</p>
@@ -127,13 +166,15 @@ export default function AgentsList() {
           <Button variant="outline" size="sm" className="mt-3" onClick={fetchAgents}>
             Try again
           </Button>
-        </div>
+        </motion.div>
       )}
 
       {/* Ready Agents Section */}
       <section>
         <div className="mb-4 flex items-center gap-2">
-          <CheckCircle className="h-5 w-5 text-primary" />
+          <div className="bg-primary/10 p-1 rounded-full">
+            <CheckCircle className="h-4 w-4 text-primary" />
+          </div>
           <h3 className="text-lg font-semibold tracking-tight">Ready Agents</h3>
           <Badge variant="outline" className="ml-1 font-normal">
             {readyAgents.length}
@@ -156,28 +197,37 @@ export default function AgentsList() {
           >
             {readyAgents.map((agent, index) => (
               <motion.div key={agent.id} variants={item}>
-                <Card className="transition-all hover:shadow-md border-primary/20">
+                <Card className="transition-all hover:shadow-md border-primary/20 overflow-hidden group">
                   <CardHeader className="relative pb-3">
                     {/* Status indicator */}
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-primary" />
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-primary/80 to-primary/50" />
                     
                     {/* Absolute badge on top right */}
                     <Badge variant="default" className="absolute top-3 right-3 bg-primary">
+                      <CheckCircle className="mr-1 h-3 w-3" />
                       Ready
                     </Badge>
                     
                     <div className="flex items-center gap-6">
                       <div className="flex-1 min-w-0">
-                        <CardTitle className="text-lg">{agent.name}</CardTitle>
-                        <p className="text-sm text-muted-foreground mt-1">{agent.purpose}</p>
+                        <CardTitle className="text-lg group-hover:text-primary transition-colors">
+                          {agent.name}
+                          {agent.isNew && (
+                            <span className="ml-2 inline-flex items-center">
+                              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                            </span>
+                          )}
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{agent.purpose}</p>
                         
                         {/* Agent type and tags */}
                         <div className="flex flex-wrap gap-1.5 mt-2">
                           {agent.type && (
                             <Badge 
                               variant="outline" 
-                              className={`${AGENT_TYPES[agent.type as keyof typeof AGENT_TYPES]?.color || AGENT_TYPES.default.color} text-white text-xs`}
+                              className={`${AGENT_TYPES[agent.type as keyof typeof AGENT_TYPES]?.color || AGENT_TYPES.default.color} text-white text-xs flex items-center gap-1`}
                             >
+                              {AGENT_TYPES[agent.type as keyof typeof AGENT_TYPES]?.icon || AGENT_TYPES.default.icon}
                               {AGENT_TYPES[agent.type as keyof typeof AGENT_TYPES]?.label || AGENT_TYPES.default.label}
                             </Badge>
                           )}
@@ -199,7 +249,8 @@ export default function AgentsList() {
                       
                       {/* Widget container */}
                       {agent.widgetId && (
-                        <div className="flex-shrink-0">
+                        <div className="flex-shrink-0 relative">
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-background/5 pointer-events-none z-10" />
                           <elevenlabs-convai
                             agent-id={agent.widgetId}
                             style={{ position: "static", width: "300px", maxWidth: "300px" }}
@@ -218,7 +269,7 @@ export default function AgentsList() {
                   <CardContent className="pt-0">
                     {agent.type === "newpage" && agent.slug && (
                       <Link href={agent.slug} target="_blank" passHref>
-                        <Button className="mt-3 w-full group">
+                        <Button className="mt-3 w-full group bg-primary/90 hover:bg-primary">
                           Open Agent
                           <ChevronRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                         </Button>
@@ -235,7 +286,9 @@ export default function AgentsList() {
       {/* Upcoming Agents Section */}
       <section>
         <div className="mb-4 flex items-center gap-2">
-          <Clock className="h-5 w-5 text-muted-foreground" />
+          <div className="bg-muted/50 p-1 rounded-full">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </div>
           <h3 className="text-lg font-semibold tracking-tight">Upcoming Agents</h3>
           <Badge variant="outline" className="ml-1 font-normal">
             {upcomingAgents.length}
@@ -258,18 +311,21 @@ export default function AgentsList() {
           >
             {upcomingAgents.map((agent, index) => (
               <motion.div key={agent.id} variants={item}>
-                <Card className="transition-all hover:shadow-md border-muted">
+                <Card className="transition-all hover:shadow-sm border-muted group">
                   <CardHeader className="relative pb-3">
                     {/* Status indicator */}
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-muted" />
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-muted via-muted/80 to-muted/50" />
                     
                     {/* Absolute badge on top right */}
                     <Badge variant="secondary" className="absolute top-3 right-3">
+                      <Clock className="mr-1 h-3 w-3" />
                       Coming Soon
                     </Badge>
                     
                     <div className="space-y-1">
-                      <CardTitle className="text-lg">{agent.name}</CardTitle>
+                      <CardTitle className="text-lg group-hover:text-muted-foreground/80 transition-colors">
+                        {agent.name}
+                      </CardTitle>
                       <p className="text-sm text-muted-foreground">{agent.purpose}</p>
                       
                       {/* Agent type and tags */}
@@ -277,8 +333,9 @@ export default function AgentsList() {
                         {agent.type && (
                           <Badge 
                             variant="outline" 
-                            className={`${AGENT_TYPES[agent.type as keyof typeof AGENT_TYPES]?.color || AGENT_TYPES.default.color} text-white text-xs opacity-70`}
+                            className={`${AGENT_TYPES[agent.type as keyof typeof AGENT_TYPES]?.color || AGENT_TYPES.default.color} text-white text-xs opacity-70 flex items-center gap-1`}
                           >
+                            {AGENT_TYPES[agent.type as keyof typeof AGENT_TYPES]?.icon || AGENT_TYPES.default.icon}
                             {AGENT_TYPES[agent.type as keyof typeof AGENT_TYPES]?.label || AGENT_TYPES.default.label}
                           </Badge>
                         )}
@@ -296,15 +353,11 @@ export default function AgentsList() {
                     {agent.upcomingDate && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Calendar className="h-4 w-4" />
-                        <span>Available on: {new Date(agent.upcomingDate).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}</span>
+                        <span>Available on: {agent.upcomingDate}</span>
                       </div>
                     )}
                     
-                    <div className="flex h-16 items-center justify-center rounded-lg border-2 border-dashed bg-muted/50">
+                    <div className="flex h-16 items-center justify-center rounded-lg border-2 border-dashed bg-muted/50 group-hover:bg-muted/70 transition-colors">
                       <div className="flex flex-col items-center text-center">
                         <Clock className="h-4 w-4 text-muted-foreground mb-1" />
                         <p className="text-xs text-muted-foreground">Preview Coming Soon</p>
@@ -312,7 +365,7 @@ export default function AgentsList() {
                     </div>
                     
                     <Button variant="outline" className="w-full" disabled>
-                      Coming Soon
+                      <span className="opacity-70">Coming Soon</span>
                     </Button>
                   </CardContent>
                 </Card>
@@ -330,7 +383,7 @@ function AgentsListSkeleton() {
     <div className="w-full space-y-8">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Skeleton className="h-5 w-5 rounded-full" />
+          <Skeleton className="h-8 w-8 rounded-full" />
           <Skeleton className="h-7 w-32" />
           <Skeleton className="h-5 w-16 rounded-full ml-2" />
         </div>
@@ -339,7 +392,7 @@ function AgentsListSkeleton() {
       
       <section>
         <div className="mb-4 flex items-center gap-2">
-          <Skeleton className="h-5 w-5 rounded-full" />
+          <Skeleton className="h-6 w-6 rounded-full" />
           <Skeleton className="h-6 w-36" />
         </div>
         
@@ -369,7 +422,7 @@ function AgentsListSkeleton() {
       
       <section>
         <div className="mb-4 flex items-center gap-2">
-          <Skeleton className="h-5 w-5 rounded-full" />
+          <Skeleton className="h-6 w-6 rounded-full" />
           <Skeleton className="h-6 w-36" />
         </div>
         

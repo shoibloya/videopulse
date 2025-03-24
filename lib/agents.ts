@@ -15,9 +15,9 @@ export async function getAgents(): Promise<Agent[]> {
     {
       id: "onboarding",
       name: "Onboarding Agent",
-      purpose: "Onboard Coco Pixels with Nuggt",
+      purpose: "Onboard Cloudsine with Nuggt",
       status: "ready",
-      widgetId: "D1qdaBBDlMtTjeiTwOFy", // widget embed id
+      widgetId: "9yUsO8bMCkcNDju7SZig", // widget embed id
       type: "inplace", // Example type
     },
     {
@@ -25,7 +25,7 @@ export async function getAgents(): Promise<Agent[]> {
       name: "Monthly Reporting Agent (March-April)",
       purpose: "Reports from first month of subscription",
       status: "upcoming",
-      upcomingDate: "16th March",
+      upcomingDate: "19th April",
       type: "inplace", // Example type
     },
 
