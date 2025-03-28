@@ -11,6 +11,7 @@ import AgentsList from "@/components/AgentsList"
 import TaskCalendar from "@/components/TaskCalendar"
 import TrafficGraph from "@/components/TrafficGraph"
 import TrafficBlocks from "@/components/TrafficBlocks"
+import { BlogSection } from "@/components/blog-section"
 
 export default function Dashboard() {
   // Example KPI data
@@ -40,7 +41,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background/95 to-primary/5">
-      {/* Header & KPI Cards Section */}
       <div className="container mx-auto flex flex-col space-y-8 px-4 py-8 md:px-6 lg:px-8">
         {/* Dashboard Title */}
         <div className="flex flex-col gap-2 text-center">
@@ -79,30 +79,8 @@ export default function Dashboard() {
             </motion.div>
           ))}
         </motion.div>
-      </div>
 
-      <hr className="my-8 border-t border-gray-300" />
-
-      {/* Organic Traffic Target Section */}
-      <div className="container mx-auto px-4 py-8">
-        <h2 className="text-2xl font-bold mb-4">Organic Traffic Target [Tentative]</h2>
-        <div className="flex flex-col md:flex-row gap-8">
-          {/* Left Column: Traffic Graph */}
-          <div className="flex-1">
-            <TrafficGraph />
-          </div>
-          {/* Right Column: Traffic Blocks */}
-          <div className="w-full md:w-1/3">
-            <TrafficBlocks />
-          </div>
-        </div>
-      </div>
-
-      <hr className="my-8 border-t border-gray-300" />
-
-      {/* Task Calendar & Agents Section */}
-      <div className="container mx-auto flex flex-col space-y-8 px-4 py-8 md:px-6 lg:px-8">
-        <h2 className="text-2xl font-bold">Task Calendar & Agents</h2>
+        {/* Task Calendar & Agents Section */}
         <motion.div
           variants={containerVariants}
           initial="hidden"
@@ -113,7 +91,6 @@ export default function Dashboard() {
           <motion.div variants={itemVariants}>
             <TaskCalendar />
           </motion.div>
-
           {/* Agents List */}
           <motion.div variants={itemVariants}>
             <Card className="overflow-hidden border bg-card/50 shadow-md backdrop-blur-sm">
@@ -123,13 +100,30 @@ export default function Dashboard() {
             </Card>
           </motion.div>
         </motion.div>
-      </div>
 
-      <hr className="my-8 border-t border-gray-300" />
+        {/* Organic Traffic Target Section */}
+        <div className="container mx-auto px-4 py-8">
+          <h2 className="text-2xl font-bold mb-4">Organic Traffic Target [Tentative]</h2>
+          <div className="flex flex-col md:flex-row gap-8">
+            {/* Traffic Graph */}
+            <div className="flex-1">
+              <TrafficGraph />
+            </div>
+            {/* Traffic Blocks */}
+            <div className="w-full md:w-1/3">
+              <TrafficBlocks />
+            </div>
+          </div>
+        </div>
 
-      {/* SEO Metrics Section */}
-      <div className="container mx-auto flex flex-col space-y-8 px-4 py-8 md:px-6 lg:px-8">
-        <h2 className="text-2xl font-bold">SEO Metrics</h2>
+        {/* Blog Section */}
+        <motion.div variants={containerVariants} initial="hidden" animate="visible">
+          <motion.div variants={itemVariants}>
+            <BlogSection />
+          </motion.div>
+        </motion.div>
+
+        {/* SEO Metrics Section */}
         <motion.div
           variants={containerVariants}
           initial="hidden"
