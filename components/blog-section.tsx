@@ -19,6 +19,16 @@ const blogPosts = [
     url: "/blog-one",
     status: "pending",
   },
+  {
+    id: 2,
+    title: "Securing Large Language Models: A Deep Dive into Vulnerabilities and Mitigation Strategies",
+    excerpt: "Generative AI powered by large language models (LLMs) is rapidly transforming enterprise operations—from customer service chatbots to automated analytics. However, as enterprises integrate these systems, they must also address emerging vulnerabilities. In this blog, we explore critical vulnerabilities affecting large language models, including prompt injection, context hijacking, and model jailbreaks. We also outline actionable mitigation strategies, such as prompt engineering, fine-tuning, red teaming, and the implementation of robust guardrails. By understanding these risks and applying layered security measures, organizations can better safeguard their generative AI deployments.",
+    imageUrl: "/blog-two.png?height=200&width=400",
+    date: "Apr 7",
+    readTime: "12 min read",
+    url: "/blog-two",
+    status: "pending",
+  },
   
 ]
 
