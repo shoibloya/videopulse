@@ -45,7 +45,7 @@ export default function EditBlogPage() {
   const params = useParams<{ key: string }>();
   const key = params.key;
 
-  /* ---------- pin‑gate ---------- */
+  /* ---------- pin-gate ---------- */
   const [pinOk, setPinOk] = useState(false);
   const [pin, setPin] = useState("");
 
@@ -99,7 +99,7 @@ export default function EditBlogPage() {
         child(dbRef(db), `blogUploadsNew/${COMPANY_NAME}/${key}`),
         {
           ...form,
-          date: new Date(form.date).toISOString(),
+          date: form.date, // store raw string
           imageUrl,
         }
       );
@@ -190,7 +190,7 @@ export default function EditBlogPage() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Input
-              placeholder="Date"
+              placeholder="Date (e.g. 2025-05-13)"
               required
               value={form.date}
               onChange={(e) =>
