@@ -64,7 +64,7 @@ export default function BlogUploadPage() {
       await dbPush(dbRef(db, `blogUploadsNew/${COMPANY_NAME}`), {
         id: Date.now(),
         ...form,
-        date: new Date(form.date).toISOString(),
+        date: form.date,  // store raw string
         imageUrl,
       });
 
@@ -107,7 +107,7 @@ export default function BlogUploadPage() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Input
-              placeholder="Date (e.g. 2025‑05‑13)"
+              placeholder="Date (e.g. 2025-05-13)"
               required
               value={form.date}
               onChange={(e) =>
