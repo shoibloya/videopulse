@@ -80,18 +80,18 @@ export default function Dashboard() {
           ))}
         </motion.div>
 
-        {/* Task Calendar & Agents Section */}
+        {/* Task Calendar & Agents Section 
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
           className="grid grid-cols-1 gap-6 lg:grid-cols-2"
         >
-          {/* Task Calendar */}
+          {/* Task Calendar 
           <motion.div variants={itemVariants}>
             <TaskCalendar />
           </motion.div>
-          {/* Agents List */}
+          {/* Agents List 
           <motion.div variants={itemVariants}>
             <Card className="overflow-hidden border bg-card/50 shadow-md backdrop-blur-sm">
               <CardContent className="p-4">
@@ -100,6 +100,7 @@ export default function Dashboard() {
             </Card>
           </motion.div>
         </motion.div>
+        */}
 
         {/* Organic Traffic Target Section */}
         <div className="container mx-auto px-4 py-8">

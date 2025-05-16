@@ -19,89 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const COMPANY_NAME = "Cloudsine";
 
 // Sample blog data - replace with your actual data source
-const seedPosts = [
-  {
-    id: 1,
-    title: "Detecting and Defending Against Adverserial Prompts: Secure Your GenAI Systems",
-    excerpt: "Explore comprehensive strategies to detect and defend against adverserial prompts in generative AI. Learn how embedding similarity, pattern matching, and red teaming can safeguard your AI applications from malicious prompt attacks.",
-    imageUrl: "/image_1.png?height=200&width=400",
-    date: "Mar 28, 2025",
-    readTime: "12 min read",
-    url: "/blog-one",
-    status: "pending",
-  },
-  {
-    id: 2,
-    title: "Securing Large Language Models: A Deep Dive into Vulnerabilities and Mitigation Strategies",
-    excerpt: "Generative AI powered by large language models (LLMs) is rapidly transforming enterprise operations—from customer service chatbots to automated analytics. However, as enterprises integrate these systems, they must also address emerging vulnerabilities. In this blog, we explore critical vulnerabilities affecting large language models, including prompt injection, context hijacking, and model jailbreaks. We also outline actionable mitigation strategies, such as prompt engineering, fine-tuning, red teaming, and the implementation of robust guardrails. By understanding these risks and applying layered security measures, organizations can better safeguard their generative AI deployments.",
-    imageUrl: "/blog-two.png?height=200&width=400",
-    date: "Apr 7",
-    readTime: "12 min read",
-    url: "/blog-two",
-    status: "pending",
-  },
-  {
-    id: 3,
-    title: "Making Sense of AI Security Frameworks: Your Roadmap to OWASP, MITRE ATLAS, and the NIST RMF",
-    excerpt: "Blog for approval",
-    imageUrl: "/blog-three.png?height=200&width=400",
-    date: "Apr 23",
-    readTime: "12 min read",
-    url: "https://docs.google.com/document/d/1cDA05JlWRbdEKBTbrSgFzhH7gBOyIEZ5j5iIPNhIItE/edit?usp=sharing",
-    status: "pending",
-  },
-  {
-    id: 4,
-    title: "Building a Safer Tomorrow: How to Secure Your Retrieval-Augmented Generation (RAG) Applications, Inside and Out",
-    excerpt: "Blog for approval",
-    imageUrl: "/blog-four.png?height=200&width=400",
-    date: "Apr 23",
-    readTime: "12 min read",
-    url: "https://docs.google.com/document/d/1DVh8IUCr6EGaeJNqBh_6Q1qqcx9_3gDK8816ZFWK3XM/edit?usp=sharing",
-    status: "pending",
-  },
-  {
-    id: 5,
-    title: "Choosing a Generative AI Security Platform: Key Features and Gaps to Consider",
-    excerpt: "Forward-looking CIOs and CISOs need more than vendor lists when choosing a GenAI security platform. This guide outlines key features, identifies gaps in current solutions, and offers actionable insight for evaluating enterprise-grade GenAI protection.",
-    imageUrl: "/outline.png?height=200&width=400",
-    date: "Apr 25",
-    readTime: "12 min read",
-    url: "/blog-five",
-    status: "pending",
-  },
-  {
-    id: 6,
-    title: "Securing Enterprise AI Chatbots: Best Practices for Safe Deployment",
-    excerpt: "LLM-powered chatbots present unique risks beyond traditional chatbot threats. Learn best practices for protecting AI systems from prompt injection, data leakage, and unmonitored output in an enterprise setting.",
-    imageUrl: "/outline.png?height=200&width=400",
-    date: "May 2",
-    readTime: "12 min read",
-    url: "/blog-six",
-    status: "pending",
-  },
-  {
-    id: 7,
-    title: "What is a Generative AI Firewall and Do You Need One?",
-    excerpt: "A GenAI firewall monitors prompts and model outputs for sensitive content or threats. Discover how this new security layer protects enterprise AI from data leaks, jailbreaks, and policy violations.",
-    imageUrl: "/outline.png?height=200&width=400",
-    date: "May 9",
-    readTime: "12 min read",
-    url: "/blog-seven",
-    status: "pending",
-  },
-  {
-    id: 8,
-    title: "Preventing Data Leaks in Generative AI Applications",
-    excerpt: "CISOs are rethinking data loss prevention in the age of GenAI. This article explains why conventional DLP tools fall short, and how new LLM-aware approaches like Cloudsine’s GenAI firewall close the gap.",
-    imageUrl: "/outline.png?height=200&width=400",
-    date: "May 16",
-    readTime: "12 min read",
-    url: "/blog-eight",
-    status: "pending",
-  },
-  
-]
+const seedPosts = [{}]
 
 type BlogCore = (typeof seedPosts)[number];
 type BlogPost = BlogCore & { key: string };
@@ -122,11 +40,14 @@ export function BlogSection() {
       setPosts(loaded);
 
       /* seed once */
-      seedPosts.forEach((p) => {
-        if (!loaded.some((l) => l.id === p.id)) {
-          set(child(listRef, String(p.id)), p);
-        }
-      });
+     seedPosts.forEach((p) => {
+  if (!loaded.some((l) => l.id === p.id)) {
+    set(
+      child(listRef, String(p.id)),
+      { ...p, date: String(p.date) }   // guarantee it’s a plain string
+    );
+  }
+});
     });
 
     return () => unsub();
@@ -190,13 +111,7 @@ export function BlogSection() {
 
             <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3" />
-              <span>
-                {new Intl.DateTimeFormat("en-GB", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                }).format(new Date(post.date))}
-              </span>
+              <span>{post.date}</span>
             </div>
             <span>•</span>
             <span>{post.readTime}</span>
