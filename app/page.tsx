@@ -1,6 +1,9 @@
 "use client"
 
 import { motion } from "framer-motion"
+import Link from "next/link"
+
+import { Button } from "@/components/ui/button"
 import { KpiCard } from "@/components/kpi-card"
 import { KeywordsTable } from "@/components/keywords-table"
 import { BacklinksTable } from "@/components/backlinks-table"
@@ -43,7 +46,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gradient-to-b from-background via-background/95 to-primary/5">
       <div className="container mx-auto flex flex-col space-y-8 px-4 py-8 md:px-6 lg:px-8">
         {/* Dashboard Title */}
-        <div className="flex flex-col gap-2 text-center">
+        <div className="flex flex-col items-center gap-2 text-center">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -64,6 +67,19 @@ export default function Dashboard() {
           >
             Track your website&apos;s performance and SEO metrics
           </motion.p>
+
+          {/* Analytics Console button */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <Link href="/analytics">
+              <Button size="sm" className="mt-2">
+                Analytics&nbsp;Console
+              </Button>
+            </Link>
+          </motion.div>
         </div>
 
         {/* KPI Cards */}
@@ -75,23 +91,26 @@ export default function Dashboard() {
         >
           {kpiData.map((kpi, index) => (
             <motion.div key={kpi.title} variants={itemVariants}>
-              <KpiCard title={kpi.title} value={kpi.value} icon={kpi.icon} index={index} />
+              <KpiCard
+                title={kpi.title}
+                value={kpi.value}
+                icon={kpi.icon}
+                index={index}
+              />
             </motion.div>
           ))}
         </motion.div>
 
-        {/* Task Calendar & Agents Section 
+        {/* Task Calendar & Agents Section
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
           className="grid grid-cols-1 gap-6 lg:grid-cols-2"
         >
-          {/* Task Calendar 
           <motion.div variants={itemVariants}>
             <TaskCalendar />
           </motion.div>
-          {/* Agents List 
           <motion.div variants={itemVariants}>
             <Card className="overflow-hidden border bg-card/50 shadow-md backdrop-blur-sm">
               <CardContent className="p-4">
@@ -104,8 +123,11 @@ export default function Dashboard() {
 
         {/* Organic Traffic Target Section */}
         <div className="container mx-auto px-4 py-8">
-          <h2 className="text-2xl font-bold mb-4">Organic Traffic Target [Tentative]</h2>
-          <div className="flex flex-col md:flex-row gap-8">
+          <h2 className="mb-4 text-2xl font-bold">
+            Organic Traffic Target&nbsp;
+            <span className="text-sm text-muted-foreground">(Tentative)</span>
+          </h2>
+          <div className="flex flex-col gap-8 md:flex-row">
             {/* Traffic Graph */}
             <div className="flex-1">
               <TrafficGraph />
@@ -118,7 +140,11 @@ export default function Dashboard() {
         </div>
 
         {/* Blog Section */}
-        <motion.div variants={containerVariants} initial="hidden" animate="visible">
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
           <motion.div variants={itemVariants}>
             <BlogSection />
           </motion.div>
@@ -138,7 +164,9 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Search className="h-5 w-5 text-primary" />
-                      <h2 className="text-xl font-bold tracking-tight">SEO Metrics</h2>
+                      <h2 className="text-xl font-bold tracking-tight">
+                        SEO Metrics
+                      </h2>
                     </div>
                     <TabsList className="bg-background/80 backdrop-blur-sm">
                       <TabsTrigger value="keywords">Keywords</TabsTrigger>
