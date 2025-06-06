@@ -1,13 +1,52 @@
+/* ───────────────────────────────────────────
+   pages/analytics/page.tsx   (Next 13/14 “app” dir)
+   Google Search Console Dashboard
+─────────────────────────────────────────── */
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import {
+  useState,
+  useEffect,
+  useCallback,
+  lazy,
+  Suspense,
+} from "react"
 import Script from "next/script"
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
+import { format } from "date-fns"
+import {
+  BLOG_URLS,
+  BLOG_REPORTS,
+  isReportReady,
+} from "@/lib/blogPosts"
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardDescription,
+} from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
 import {
   LineChart,
   Line,
@@ -16,465 +55,552 @@ import {
   Tooltip,
   CartesianGrid,
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  Legend,
-  PieChart,
-  Pie,
-  Cell,
 } from "recharts"
-import { ArrowUpRight, BarChart3, Eye, Globe, LineChartIcon, PieChartIcon, RefreshCw, Users } from "lucide-react"
 
-/* ─────────────────────────────────────────── TYPES */
-type GAProperty = { id: string; name: string }
-type Summary = { date: string; users: number; pageViews: number }
-type PageRow = {
-  pagePath: string
-  users: number
-  pageViews: number
-  source: string
-}
+import {
+  CalendarIcon,
+  Eye,
+  Users,
+  LineChartIcon,
+  PieChartIcon,
+  RefreshCw,
+  TrendingUp,
+  FileText,
+} from "lucide-react"
 
-/* ─────────────────────────────────────────── COLORS */
-const CHART_COLORS = {
-  users: "#7c3aed",
-  pageViews: "#10b981",
-  accent: "#f97316",
+/* ───────────────────────── TYPES */
+type SiteEntry = { siteUrl: string; displayName: string }
+type DailyRow = { date: string; clicks: number; impressions: number }
+type QueryRow = { query: string; clicks: number; impressions: number }
+
+/* ───────────────────────── COLORS */
+const COLORS = {
+  clicks: "#7c3aed",
+  impressions: "#10b981",
   grid: "#e2e8f0",
-  pieColors: [
-    "#7c3aed",
-    "#10b981",
-    "#f97316",
-    "#0ea5e9",
-    "#ec4899",
-    "#8b5cf6",
-    "#14b8a6",
-    "#f59e0b",
-    "#3b82f6",
-    "#d946ef",
-    "#a78bfa",
-    "#34d399",
-    "#fbbf24",
-    "#60a5fa",
-    "#f472b6",
-  ],
 }
 
-/* ─────────────────────────────────────────── COMPONENT */
+/* ───────────────────────── HELPERS */
+const formatDateLabel = (yyyymmdd: string) =>
+  `${yyyymmdd.slice(4, 6)}/${yyyymmdd.slice(6, 8)}`
+
+const buildFilter = (page: string) => ({
+  dimensionFilterGroups: [
+    {
+      groupType: "and",
+      filters: [
+        {
+          dimension: "page",
+          operator: "equals",
+          expression: page,
+        },
+      ],
+    },
+  ],
+})
+
+/* ───────────────────────── Lazy Report wrapper */
+const ReportTab = ({ url }: { url: string }) => {
+  const loader = BLOG_REPORTS[url]
+  if (!loader) {
+    return (
+      <p className="text-center py-10 text-gray-600">
+        Report coming soon 🚧
+      </p>
+    )
+  }
+  const Report = lazy(loader)
+  return (
+    <Suspense fallback={<p className="text-center py-10">Loading report…</p>}>
+      <Report />
+    </Suspense>
+  )
+}
+
+/* ───────────────────────── COMPONENT */
 export default function AnalyticsPage() {
-  /* state */
+  /* auth & property */
   const [token, setToken] = useState<string | null>(null)
-  const [properties, setProperties] = useState<GAProperty[]>([])
-  const [propertyId, setPropertyId] = useState<string | null>(null)
-  const [summary, setSummary] = useState<Summary[]>([])
-  const [pages, setPages] = useState<PageRow[]>([])
+  const [sites, setSites] = useState<SiteEntry[]>([])
+  const [siteUrl, setSiteUrl] = useState<string | null>(null)
+
+  /* blog & dates */
+  const [blog, setBlog] = useState<string | null>(null)
+  const [start, setStart] = useState<Date>(() => new Date(2025, 2, 1)) // 2 = March
+  const [end, setEnd] = useState<Date>(() => new Date())
+
+  /* data */
+  const [daily, setDaily] = useState<DailyRow[]>([])
+  const [queries, setQueries] = useState<QueryRow[]>([])
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  /* ─────────── 1. Login */
+  /* ─────────── OAuth */
   const signIn = useCallback(() => {
-    // @ts-ignore injected by script
+    // @ts-ignore injected by Google script
     const client = window.google.accounts.oauth2.initTokenClient({
       client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
-      scope: "https://www.googleapis.com/auth/analytics.readonly openid email profile",
+      scope:
+        "https://www.googleapis.com/auth/webmasters.readonly openid email profile",
       prompt: "",
       callback: (resp: any) =>
-        resp.access_token ? setToken(resp.access_token) : setError("Login cancelled or failed."),
+        resp.access_token
+          ? setToken(resp.access_token)
+          : setError("Login cancelled or failed."),
     })
     client.requestAccessToken()
   }, [])
 
-  /* ─────────── 2. List GA4 properties */
-  const listProperties = useCallback(async () => {
+  /* ─────────── List sites */
+  const listSites = useCallback(async () => {
     if (!token) return
     try {
-      const res = await fetch("https://analyticsadmin.googleapis.com/v1beta/accountSummaries?pageSize=200", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await fetch(
+        "https://searchconsole.googleapis.com/webmasters/v3/sites",
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
       const json = await res.json()
       if (json.error) throw new Error(json.error.message)
 
-      const props: GAProperty[] =
-        json.accountSummaries
-          ?.flatMap((a: any) =>
-            a.propertySummaries?.map((p: any) => ({
-              id: p.property,
-              name: p.displayName,
-            })),
-          )
-          .filter(Boolean) || []
-      setProperties(props)
+      const entries: SiteEntry[] = (json.siteEntry ?? [])
+        .filter((s: any) =>
+          ["siteOwner", "siteFullUser"].includes(s.permissionLevel),
+        )
+        .map((s: any) => ({
+          siteUrl: s.siteUrl,
+          displayName: s.siteUrl
+            .replace(/^https?:\/\//, "")
+            .replace(/\/$/, ""),
+        }))
+
+      setSites(entries)
     } catch (e: any) {
-      setError(e.message ?? "Could not list GA properties.")
+      setError(e.message ?? "Could not list sites.")
     }
   }, [token])
 
   useEffect(() => {
-    if (token) listProperties()
-  }, [token, listProperties])
+    if (token) listSites()
+  }, [token, listSites])
 
-  /* ─────────── 3. Fetch analytics */
-  const fetchAnalytics = useCallback(async () => {
-    if (!token || !propertyId) return
+  /* ─────────── Fetch blog analytics */
+  const fetchBlog = useCallback(async () => {
+    if (!token || !siteUrl || !blog) return
     setLoading(true)
     setError(null)
 
-    const today = new Date().toISOString().slice(0, 10)
-    const weekAgo = new Date(Date.now() - 6 * 24 * 3600_000).toISOString().slice(0, 10)
+    const api = `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(
+      siteUrl.endsWith("/") ? siteUrl : siteUrl + "/",
+    )}/searchAnalytics/query`
+    const startDate = format(start, "yyyy-MM-dd")
+    const endDate = format(end, "yyyy-MM-dd")
 
     try {
-      /* 3.a Daily summary */
-      const dailyRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propertyId}:runReport`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          dateRanges: [{ startDate: weekAgo, endDate: today }],
-          dimensions: [{ name: "date" }],
-          metrics: [{ name: "totalUsers" }, { name: "screenPageViews" }],
-        }),
-      })
-      const dailyJson = await dailyRes.json()
+      /* 1. Daily */
+      const dailyBody = {
+        startDate,
+        endDate,
+        dimensions: ["date"],
+        rowLimit: 1000,
+        ...buildFilter(blog),
+      }
+      const dailyJson = await (
+        await fetch(api, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(dailyBody),
+        })
+      ).json()
       if (dailyJson.error) throw new Error(dailyJson.error.message)
-
-      const daily: Summary[] = dailyJson.rows.map((r: any) => ({
-        date: r.dimensionValues[0].value,
-        users: Number(r.metricValues[0].value),
-        pageViews: Number(r.metricValues[1].value),
-      }))
-      daily.sort((a, b) => a.date.localeCompare(b.date)) // chronological
-
-      /* 3.b Per‑page breakdown */
-      const pageRes = await fetch(`https://analyticsdata.googleapis.com/v1beta/${propertyId}:runReport`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          dateRanges: [{ startDate: weekAgo, endDate: today }],
-          dimensions: [{ name: "pagePath" }, { name: "sessionSource" }],
-          metrics: [{ name: "screenPageViews" }, { name: "totalUsers" }],
-          orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
-          limit: 10000, // ↑ bigger sample for source charts
-        }),
-      })
-      const pageJson = await pageRes.json()
-      if (pageJson.error) throw new Error(pageJson.error.message)
-
-      const pageRows: PageRow[] = pageJson.rows.map((r: any) => ({
-        pagePath: r.dimensionValues[0].value,
-        source: r.dimensionValues[1].value,
-        pageViews: Number(r.metricValues[0].value),
-        users: Number(r.metricValues[1].value),
+      const dailyRows: DailyRow[] = (dailyJson.rows ?? []).map((r: any) => ({
+        date: r.keys[0].replace(/-/g, ""),
+        clicks: r.clicks,
+        impressions: r.impressions,
       }))
 
-      setSummary(daily)
-      setPages(pageRows)
+      /* 2. Top queries */
+      const queryBody = {
+        startDate,
+        endDate,
+        dimensions: ["query"],
+        rowLimit: 25,
+        orderBy: [{ field: "clicks", desc: true }],
+        ...buildFilter(blog),
+      }
+      const queryJson = await (
+        await fetch(api, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(queryBody),
+        })
+      ).json()
+      if (queryJson.error) throw new Error(queryJson.error.message)
+      const queryRows: QueryRow[] = (queryJson.rows ?? []).map((r: any) => ({
+        query: r.keys[0],
+        clicks: r.clicks,
+        impressions: r.impressions,
+      }))
+
+      setDaily(dailyRows.sort((a, b) => a.date.localeCompare(b.date)))
+      setQueries(queryRows)
     } catch (e: any) {
-      setError(e.message ?? "Failed to fetch analytics.")
+      setError(e.message ?? "Failed to fetch blog analytics.")
     } finally {
       setLoading(false)
     }
-  }, [token, propertyId])
+  }, [token, siteUrl, blog, start, end])
 
   useEffect(() => {
-    fetchAnalytics()
-  }, [fetchAnalytics])
+    fetchBlog()
+  }, [fetchBlog])
 
-  /* totals */
-  const totalUsers = summary.reduce((t, d) => t + d.users, 0)
-  const totalViews = summary.reduce((t, d) => t + d.pageViews, 0)
+  /* ─────────── Derived totals */
+  const totalClicks = daily.reduce((t, d) => t + d.clicks, 0)
+  const totalImpressions = daily.reduce((t, d) => t + d.impressions, 0)
 
-  /* derived traffic‑source dataset */
-  const sourceTotals = pages.reduce<Record<string, { source: string; users: number; pageViews: number }>>(
-    (acc, row) => {
-      if (!acc[row.source]) acc[row.source] = { source: row.source, users: 0, pageViews: 0 }
-      acc[row.source].users += row.users
-      acc[row.source].pageViews += row.pageViews
-      return acc
-    },
-    {},
-  )
-  const sourceData = Object.values(sourceTotals).sort((a, b) => b.pageViews - a.pageViews)
-  const topSourceData = sourceData.slice(0, 15) // for bar chart
-
-  /* Format date for display */
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return ""
-    const [year, month, day] = [dateStr.slice(0, 4), dateStr.slice(4, 6), dateStr.slice(6, 8)]
-    return `${month}/${day}`
-  }
-
-  /* Custom tooltip for charts */
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-3 border rounded-md shadow-md">
-          <p className="font-medium">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={`tooltip-${index}`} style={{ color: entry.color }}>
-              {entry.name}: {entry.value.toLocaleString()}
-            </p>
-          ))}
-        </div>
-      )
-    }
-    return null
-  }
+  /* ─────────── Tooltip */
+  const TooltipBox = ({ active, payload, label }: any) =>
+    active && payload?.length ? (
+      <div className="bg-white p-3 border rounded-lg shadow-lg">
+        <p className="font-medium text-gray-900 mb-1">{label}</p>
+        {payload.map((e: any, i: number) => (
+          <p key={i} style={{ color: e.color }} className="text-sm">
+            {e.name}:{" "}
+            <span className="font-semibold">
+              {e.value.toLocaleString()}
+            </span>
+          </p>
+        ))}
+      </div>
+    ) : null
 
   /* ─────────── UI */
   return (
     <>
-      <Script src="https://accounts.google.com/gsi/client" strategy="beforeInteractive" />
+      <Script
+        src="https://accounts.google.com/gsi/client"
+        strategy="beforeInteractive"
+      />
 
-      <div className="min-h-screen bg-gray-50/50">
-        <div className="container mx-auto max-w-7xl px-4 py-10">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
+        <div className="container mx-auto max-w-7xl px-4 py-8">
+          {/* HEADER */}
           <header className="mb-8">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
-                <p className="text-muted-foreground mt-1">Insights from your Google Analytics 4 data</p>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-violet-100 rounded-lg">
+                <TrendingUp className="h-6 w-6 text-violet-600" />
               </div>
-
-              {token && propertyId && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={fetchAnalytics}
-                    disabled={loading}
-                    className="flex items-center gap-1"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Refresh
-                  </Button>
-                  <Select value={propertyId} onValueChange={setPropertyId}>
-                    <SelectTrigger className="w-[220px]">
-                      <SelectValue placeholder="Choose property…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {properties.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  Blog Analytics
+                </h1>
+                <p className="text-gray-600">
+                  Google Search Console Dashboard
+                </p>
+              </div>
             </div>
+
+            {!token && (
+              <Card className="max-w-md">
+                <CardContent className="pt-6">
+                  <div className="text-center space-y-4">
+                    <div className="p-3 bg-blue-50 rounded-full w-fit mx-auto">
+                      <Users className="h-8 w-8 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg mb-2">
+                        Connect Your Account
+                      </h3>
+                      <p className="text-gray-600 text-sm mb-4">
+                        Sign in with Google to access your Search Console
+                        data
+                      </p>
+                    </div>
+                    <Button onClick={signIn} className="w-full">
+                      Sign in with Google
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {token && (
+              <Card className="p-4">
+                <div className="flex flex-wrap gap-3 items-center">
+                  {/* Property select */}
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700">
+                      Property
+                    </label>
+                    <Select
+                      value={siteUrl ?? undefined}
+                      onValueChange={(v) => {
+                        setSiteUrl(v)
+                        setBlog(null)
+                      }}
+                    >
+                      <SelectTrigger className="w-[280px]">
+                        <SelectValue placeholder="Choose Search Console property" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sites.map((s) => (
+                          <SelectItem key={s.siteUrl} value={s.siteUrl}>
+                            {s.displayName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Blog select */}
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium text-gray-700">
+                      Blog Post
+                    </label>
+                    <Select
+                      disabled={!siteUrl}
+                      value={blog ?? undefined}
+                      onValueChange={setBlog}
+                    >
+                      <SelectTrigger className="w-[420px]">
+                        <SelectValue placeholder="Choose blog post" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BLOG_URLS.map((u) => (
+                          <SelectItem key={u} value={u}>
+                            {u.replace(/^https?:\/\//, "")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Date pickers */}
+                  <div className="flex gap-2">
+                    <DatePicker
+                      label="Start"
+                      date={start}
+                      setDate={setStart}
+                    />
+                    <DatePicker
+                      label="End"
+                      date={end}
+                      setDate={setEnd}
+                    />
+                  </div>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={fetchBlog}
+                    disabled={loading || !blog}
+                    className="flex items-center gap-2 mt-6"
+                  >
+                    <RefreshCw
+                      className={`h-4 w-4 ${
+                        loading ? "animate-spin" : ""
+                      }`}
+                    />
+                    {loading ? "Loading..." : "Refresh"}
+                  </Button>
+                </div>
+              </Card>
+            )}
           </header>
 
-          {/* LOGIN */}
-          {!token && (
-            <Card className="mx-auto max-w-md text-center">
-              <CardHeader>
-                <CardTitle className="text-2xl">Connect Google Analytics</CardTitle>
-                <CardDescription>Sign in with your Google account to access your analytics data</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 pb-8">
-                <div className="flex justify-center">
-                  <img src="/google-analytics-logo.png" alt="Google Analytics" className="h-24 w-24 mb-4" />
+          {/* NO PROPERTY / BLOG */}
+          {token && !siteUrl && (
+            <Card className="text-center py-8">
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="p-3 bg-gray-100 rounded-full w-fit mx-auto">
+                    <LineChartIcon className="h-8 w-8 text-gray-600" />
+                  </div>
+                  <p className="text-gray-600">
+                    Select a property to begin analyzing your data.
+                  </p>
                 </div>
-                <Button onClick={signIn} size="lg" className="px-8">
-                  Sign in with Google
-                </Button>
-                {error && <p className="text-destructive text-sm font-medium">{error}</p>}
               </CardContent>
             </Card>
           )}
 
-          {/* PROPERTY DROPDOWN */}
-          {token && !propertyId && (
-            <Card className="mx-auto max-w-md">
-              <CardHeader>
-                <CardTitle className="text-xl">Select a GA4 property</CardTitle>
-                <CardDescription>Choose which analytics property you want to view</CardDescription>
-              </CardHeader>
-              <CardContent className="pb-6">
-                {properties.length === 0 && (
-                  <div className="text-center py-8">
-                    <Globe className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">No properties visible under this account.</p>
+          {token && siteUrl && !blog && (
+            <Card className="text-center py-8">
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="p-3 bg-blue-100 rounded-full w-fit mx-auto">
+                    <Eye className="h-8 w-8 text-blue-600" />
                   </div>
-                )}
-
-                {properties.length > 0 && (
-                  <Select onValueChange={(val) => setPropertyId(val)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose property…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {properties.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-                {error && <p className="mt-4 text-destructive font-medium">{error}</p>}
+                  <p className="text-gray-600">
+                    Select one of your blog URLs to load analytics.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           )}
 
           {/* DASHBOARD */}
-          {token && propertyId && (
+          {token && siteUrl && blog && (
             <>
-              {/* summary cards */}
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-                <Card className="overflow-hidden border-t-4" style={{ borderTopColor: CHART_COLORS.users }}>
+              {/* SUMMARY CARDS */}
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 mb-8">
+                {/* Clicks */}
+                <Card className="relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-20 h-20 bg-violet-500/10 rounded-full -mr-10 -mt-10"></div>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                      <Users className="h-4 w-4" />
-                      Total Users
+                    <CardTitle className="flex gap-2 items-center text-sm text-gray-600 font-medium">
+                      <Users className="h-4 w-4 text-violet-600" />{" "}
+                      Total Clicks
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     {loading ? (
                       <Skeleton className="h-8 w-24" />
                     ) : (
-                      <div className="text-3xl font-bold">
-                        {totalUsers.toLocaleString()}
-                        <span className="text-xs font-normal text-muted-foreground ml-1">last 7 days</span>
-                      </div>
+                      <p className="text-3xl font-bold text-gray-900">
+                        {totalClicks.toLocaleString()}
+                      </p>
                     )}
                   </CardContent>
                 </Card>
 
-                <Card className="overflow-hidden border-t-4" style={{ borderTopColor: CHART_COLORS.pageViews }}>
+                {/* Impressions */}
+                <Card className="relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/10 rounded-full -mr-10 -mt-10"></div>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                      <Eye className="h-4 w-4" />
-                      Page Views
+                    <CardTitle className="flex gap-2 items-center text-sm text-gray-600 font-medium">
+                      <Eye className="h-4 w-4 text-emerald-600" /> Total
+                      Impressions
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     {loading ? (
                       <Skeleton className="h-8 w-24" />
                     ) : (
-                      <div className="text-3xl font-bold">
-                        {totalViews.toLocaleString()}
-                        <span className="text-xs font-normal text-muted-foreground ml-1">last 7 days</span>
-                      </div>
+                      <p className="text-3xl font-bold text-gray-900">
+                        {totalImpressions.toLocaleString()}
+                      </p>
                     )}
                   </CardContent>
                 </Card>
 
-                <Card className="overflow-hidden border-t-4" style={{ borderTopColor: CHART_COLORS.accent }}>
+                {/* CTR */}
+                <Card className="relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-20 h-20 bg-orange-500/10 rounded-full -mr-10 -mt-10"></div>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                      <ArrowUpRight className="h-4 w-4" />
-                      Pages Per User
+                    <CardTitle className="flex gap-2 items-center text-sm text-gray-600 font-medium">
+                      <TrendingUp className="h-4 w-4 text-orange-600" />{" "}
+                      Click-Through Rate
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     {loading ? (
                       <Skeleton className="h-8 w-24" />
                     ) : (
-                      <div className="text-3xl font-bold">
-                        {totalUsers ? (totalViews / totalUsers).toFixed(2) : "0.00"}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">Top Traffic Source</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {loading ? (
-                      <Skeleton className="h-8 w-24" />
-                    ) : (
-                      <div>
-                        <div className="text-xl font-bold">{sourceData[0]?.source || "None"}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {sourceData[0] ? `${sourceData[0].pageViews.toLocaleString()} views` : ""}
-                        </div>
-                      </div>
+                      <p className="text-3xl font-bold text-gray-900">
+                        {totalImpressions
+                          ? (
+                              (totalClicks / totalImpressions) *
+                              100
+                            ).toFixed(2) + "%"
+                          : "0.00%"}
+                      </p>
                     )}
                   </CardContent>
                 </Card>
               </div>
 
-              <Tabs defaultValue="overview" className="mb-8">
-                <TabsList className="grid w-full md:w-auto grid-cols-3 md:inline-flex mb-6">
-                  <TabsTrigger value="overview" className="flex items-center gap-1">
-                    <LineChartIcon className="h-4 w-4" />
-                    <span className="hidden sm:inline">Overview</span>
+              {/* TABS */}
+              <Tabs defaultValue="overview" className="space-y-6">
+                <TabsList className="grid w-full grid-cols-3 lg:w-[600px]">
+                  <TabsTrigger
+                    value="overview"
+                    className="flex gap-2 items-center"
+                  >
+                    <LineChartIcon className="h-4 w-4" /> Overview
                   </TabsTrigger>
-                  <TabsTrigger value="pages" className="flex items-center gap-1">
-                    <BarChart3 className="h-4 w-4" />
-                    <span className="hidden sm:inline">Pages</span>
+                  <TabsTrigger
+                    value="queries"
+                    className="flex gap-2 items-center"
+                  >
+                    <PieChartIcon className="h-4 w-4" /> Queries
                   </TabsTrigger>
-                  <TabsTrigger value="sources" className="flex items-center gap-1">
-                    <PieChartIcon className="h-4 w-4" />
-                    <span className="hidden sm:inline">Sources</span>
+                  <TabsTrigger
+                    value="report"
+                    className="flex gap-2 items-center"
+                  >
+                    <FileText className="h-4 w-4" /> Report
                   </TabsTrigger>
                 </TabsList>
 
-                {/* Overview Tab */}
+                {/* OVERVIEW */}
                 <TabsContent value="overview" className="space-y-6">
-                  {/* line chart */}
                   <Card>
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <LineChartIcon className="h-5 w-5" />
-                        Daily Traffic Trends
+                      <CardTitle className="flex gap-2 items-center">
+                        <LineChartIcon className="h-5 w-5 text-violet-600" />{" "}
+                        Daily Performance
                       </CardTitle>
-                      <CardDescription>Users and page views over the last 7 days</CardDescription>
+                      <CardDescription className="text-sm text-gray-600 break-all">
+                        {blog}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent>
                       {loading ? (
-                        <div className="h-[320px] flex items-center justify-center">
-                          <div className="text-center">
-                            <Skeleton className="h-4 w-32 mx-auto mb-2" />
-                            <Skeleton className="h-[280px] w-full" />
-                          </div>
-                        </div>
+                        <Skeleton className="h-[320px] w-full" />
                       ) : (
-                        <div className="h-[320px]">
-                          <ResponsiveContainer width="100%" height="100%">
+                        <div className="h-[360px]">
+                          <ResponsiveContainer
+                            width="100%"
+                            height="100%"
+                          >
                             <LineChart
-                              data={summary.map((item) => ({
-                                ...item,
-                                date: formatDate(item.date),
+                              data={daily.map((d) => ({
+                                ...d,
+                                date: formatDateLabel(d.date),
                               }))}
                             >
-                              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+                              <CartesianGrid
+                                strokeDasharray="3 3"
+                                stroke={COLORS.grid}
+                              />
                               <XAxis
                                 dataKey="date"
-                                tick={{ fontSize: 12 }}
-                                tickLine={{ stroke: CHART_COLORS.grid }}
-                                axisLine={{ stroke: CHART_COLORS.grid }}
+                                tickLine={{ stroke: COLORS.grid }}
+                                axisLine={{ stroke: COLORS.grid }}
+                                fontSize={12}
                               />
                               <YAxis
-                                tickLine={{ stroke: CHART_COLORS.grid }}
-                                axisLine={{ stroke: CHART_COLORS.grid }}
+                                tickLine={{ stroke: COLORS.grid }}
+                                axisLine={{ stroke: COLORS.grid }}
+                                fontSize={12}
                               />
-                              <Tooltip content={<CustomTooltip />} />
-                              <Legend />
+                              <Tooltip content={<TooltipBox />} />
                               <Line
                                 type="monotone"
-                                dataKey="users"
-                                stroke={CHART_COLORS.users}
+                                dataKey="clicks"
+                                stroke={COLORS.clicks}
                                 strokeWidth={3}
-                                name="Users"
-                                dot={{ r: 4 }}
-                                activeDot={{ r: 6 }}
+                                dot={{ r: 4, fill: COLORS.clicks }}
+                                name="Clicks"
                               />
                               <Line
                                 type="monotone"
-                                dataKey="pageViews"
-                                stroke={CHART_COLORS.pageViews}
+                                dataKey="impressions"
+                                stroke={COLORS.impressions}
                                 strokeWidth={3}
-                                name="Page Views"
-                                dot={{ r: 4 }}
-                                activeDot={{ r: 6 }}
+                                dot={{
+                                  r: 4,
+                                  fill: COLORS.impressions,
+                                }}
+                                name="Impressions"
                               />
                             </LineChart>
                           </ResponsiveContainer>
@@ -484,107 +610,86 @@ export default function AnalyticsPage() {
                   </Card>
                 </TabsContent>
 
-                {/* Pages Tab */}
-                <TabsContent value="pages" className="space-y-6">
-                  {/* grouped bar chart for page details */}
+                {/* QUERIES */}
+                <TabsContent value="queries">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <BarChart3 className="h-5 w-5" />
-                        Top Pages Performance
-                      </CardTitle>
-                      <CardDescription>Users vs Page Views for your most visited pages</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {loading ? (
-                        <div className="h-[380px] flex items-center justify-center">
-                          <Skeleton className="h-[340px] w-full" />
-                        </div>
-                      ) : (
-                        <div className="h-[380px]">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart
-                              data={pages.slice(0, 20).map((page) => ({
-                                ...page,
-                                pagePath:
-                                  page.pagePath.length > 30 ? page.pagePath.substring(0, 27) + "..." : page.pagePath,
-                              }))}
-                              layout="vertical"
-                              margin={{ left: 80 }}
-                            >
-                              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
-                              <XAxis
-                                type="number"
-                                tickLine={{ stroke: CHART_COLORS.grid }}
-                                axisLine={{ stroke: CHART_COLORS.grid }}
-                              />
-                              <YAxis
-                                dataKey="pagePath"
-                                type="category"
-                                tick={{ fontSize: 11 }}
-                                width={220}
-                                tickLine={{ stroke: CHART_COLORS.grid }}
-                                axisLine={{ stroke: CHART_COLORS.grid }}
-                              />
-                              <Tooltip content={<CustomTooltip />} />
-                              <Legend />
-                              <Bar dataKey="users" barSize={12} name="Users" fill={CHART_COLORS.users} />
-                              <Bar dataKey="pageViews" barSize={12} name="Views" fill={CHART_COLORS.pageViews} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* table */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">Page Details</CardTitle>
-                      <CardDescription>Detailed breakdown of all pages with traffic sources</CardDescription>
+                      <CardTitle>Top Search Queries</CardTitle>
+                      <CardDescription className="break-all">
+                        {blog}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent className="p-0">
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                          <thead className="border-b sticky top-0 bg-background">
-                            <tr className="bg-muted/50">
-                              <th className="px-4 py-3 text-left font-medium">Page</th>
-                              <th className="px-4 py-3 text-right font-medium">Users</th>
-                              <th className="px-4 py-3 text-right font-medium">Views</th>
-                              <th className="px-4 py-3 text-left font-medium">Top Source</th>
+                          <thead className="border-b bg-gray-50/80 sticky top-0">
+                            <tr>
+                              <th className="px-6 py-4 text-left font-semibold text-gray-900">
+                                Query
+                              </th>
+                              <th className="px-6 py-4 text-right font-semibold text-gray-900">
+                                Clicks
+                              </th>
+                              <th className="px-6 py-4 text-right font-semibold text-gray-900">
+                                Impressions
+                              </th>
+                              <th className="px-6 py-4 text-right font-semibold text-gray-900">
+                                CTR
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
                             {loading
-                              ? Array(5)
+                              ? Array(8)
                                   .fill(0)
                                   .map((_, i) => (
-                                    <tr key={i} className="border-b">
-                                      <td className="px-4 py-3">
-                                        <Skeleton className="h-4 w-48" />
+                                    <tr
+                                      key={i}
+                                      className="border-b border-gray-100"
+                                    >
+                                      <td className="px-6 py-4">
+                                        <Skeleton className="h-4 w-64" />
                                       </td>
-                                      <td className="px-4 py-3 text-right">
+                                      <td className="px-6 py-4 text-right">
                                         <Skeleton className="h-4 w-12 ml-auto" />
                                       </td>
-                                      <td className="px-4 py-3 text-right">
+                                      <td className="px-6 py-4 text-right">
                                         <Skeleton className="h-4 w-12 ml-auto" />
                                       </td>
-                                      <td className="px-4 py-3">
-                                        <Skeleton className="h-4 w-24" />
+                                      <td className="px-6 py-4 text-right">
+                                        <Skeleton className="h-4 w-12 ml-auto" />
                                       </td>
                                     </tr>
                                   ))
-                              : pages.map((row, idx) => (
+                              : queries.map((q, i) => (
                                   <tr
-                                    key={`${row.pagePath}-${idx}`}
-                                    className="border-b hover:bg-muted/30 transition-colors"
+                                    key={i}
+                                    className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors"
                                   >
-                                    <td className="px-4 py-3 break-all font-medium">{row.pagePath}</td>
-                                    <td className="px-4 py-3 text-right">{row.users.toLocaleString()}</td>
-                                    <td className="px-4 py-3 text-right">{row.pageViews.toLocaleString()}</td>
-                                    <td className="px-4 py-3">
-                                      <Badge variant="outline" className="font-normal">
-                                        {row.source || "direct"}
+                                    <td
+                                      className="px-6 py-4 text-gray-900 font-medium max-w-xs truncate"
+                                      title={q.query}
+                                    >
+                                      {q.query}
+                                    </td>
+                                    <td className="px-6 py-4 text-right text-gray-900 font-semibold">
+                                      {q.clicks.toLocaleString()}
+                                    </td>
+                                    <td className="px-6 py-4 text-right text-gray-600">
+                                      {q.impressions.toLocaleString()}
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                      <Badge
+                                        variant="secondary"
+                                        className="font-medium"
+                                      >
+                                        {q.impressions
+                                          ? (
+                                              (q.clicks /
+                                                q.impressions) *
+                                              100
+                                            ).toFixed(2) + "%"
+                                          : "—"}
                                       </Badge>
                                     </td>
                                   </tr>
@@ -596,107 +701,68 @@ export default function AnalyticsPage() {
                   </Card>
                 </TabsContent>
 
-                {/* Sources Tab */}
-                <TabsContent value="sources" className="space-y-6">
-                  {/* Traffic Source Pie Chart */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <PieChartIcon className="h-5 w-5" />
-                        Traffic Sources Distribution
-                      </CardTitle>
-                      <CardDescription>Breakdown of page views by traffic source</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {loading ? (
-                        <div className="h-[340px] flex items-center justify-center">
-                          <Skeleton className="h-[300px] w-[300px] rounded-full mx-auto" />
-                        </div>
-                      ) : (
-                        <div className="h-[340px]">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Tooltip content={<CustomTooltip />} />
-                              <Legend layout="vertical" verticalAlign="middle" align="right" />
-                              <Pie
-                                data={sourceData.slice(0, 10)}
-                                dataKey="pageViews"
-                                nameKey="source"
-                                cx="50%"
-                                cy="50%"
-                                outerRadius={130}
-                                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                                labelLine={false}
-                              >
-                                {sourceData.slice(0, 10).map((entry, idx) => (
-                                  <Cell
-                                    key={`slice-${idx}`}
-                                    fill={CHART_COLORS.pieColors[idx % CHART_COLORS.pieColors.length]}
-                                  />
-                                ))}
-                              </Pie>
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Top Sources Bar Chart */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">Top Traffic Sources</CardTitle>
-                      <CardDescription>Sources bringing the most users to your site</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {loading ? (
-                        <div className="h-[340px] flex items-center justify-center">
-                          <Skeleton className="h-[300px] w-full" />
-                        </div>
-                      ) : (
-                        <div className="h-[340px]">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={topSourceData} layout="vertical" margin={{ left: 120 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
-                              <XAxis
-                                type="number"
-                                tickLine={{ stroke: CHART_COLORS.grid }}
-                                axisLine={{ stroke: CHART_COLORS.grid }}
-                              />
-                              <YAxis
-                                dataKey="source"
-                                type="category"
-                                tick={{ fontSize: 12 }}
-                                width={200}
-                                tickLine={{ stroke: CHART_COLORS.grid }}
-                                axisLine={{ stroke: CHART_COLORS.grid }}
-                              />
-                              <Tooltip content={<CustomTooltip />} />
-                              <Bar
-                                dataKey="users"
-                                barSize={16}
-                                name="Users"
-                                fill={CHART_COLORS.users}
-                                radius={[0, 4, 4, 0]}
-                              />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                {/* REPORT */}
+                <TabsContent value="report">
+                  <ReportTab url={blog} />
                 </TabsContent>
               </Tabs>
 
               {error && (
-                <div className="mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-md">
-                  <p className="text-destructive font-medium">{error}</p>
-                </div>
+                <Card className="border-red-200 bg-red-50">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-red-100 rounded-full">
+                        <RefreshCw className="h-4 w-4 text-red-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-red-900">
+                          Error
+                        </h4>
+                        <p className="text-red-700 text-sm">{error}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
             </>
           )}
         </div>
       </div>
     </>
+  )
+}
+
+/* ───────────────────────── DatePicker (shadcn) */
+type DPProps = {
+  label: string
+  date: Date
+  setDate: (d: Date) => void
+}
+function DatePicker({ label, date, setDate }: DPProps) {
+  return (
+    <div className="space-y-1">
+      <label className="text-sm font-medium text-gray-700">
+        {label}
+      </label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className="w-[160px] justify-start font-normal"
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {date ? format(date, "MMM dd, yyyy") : label}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={(d) => d && setDate(d)}
+            initialFocus
+          />
+        </PopoverContent>
+      </Popover>
+    </div>
   )
 }
