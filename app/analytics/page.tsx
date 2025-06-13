@@ -139,6 +139,7 @@ export default function AnalyticsPage() {
   /* ─────────── OAuth */
   const signIn = useCallback(() => {
     // @ts-ignore injected by Google script
+    if (!window.google?.accounts?.oauth2) return; // safety guard
     const client = window.google.accounts.oauth2.initTokenClient({
       client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
       scope:
