@@ -19,11 +19,11 @@ import { BlogSection } from "@/components/blog-section"
 export default function Dashboard() {
   // Example KPI data
   const kpiData = [
-    { title: "DR", value: 25, icon: <Activity className="h-4 w-4" /> },
-    { title: "UR", value: 22, icon: <Users className="h-4 w-4" /> },
-    { title: "Backlinks", value: 868, icon: <Link2 className="h-4 w-4" /> },
-    { title: "Ref. Domains", value: 179, icon: <Share2 className="h-4 w-4" /> },
-    { title: "Organic Traffic", value: 107, icon: <Search className="h-4 w-4" /> },
+    { title: "DR", value: 1.7, icon: <Activity className="h-4 w-4" /> },
+    { title: "UR", value: 3, icon: <Users className="h-4 w-4" /> },
+    { title: "Backlinks", value: 4, icon: <Link2 className="h-4 w-4" /> },
+    { title: "Ref. Domains", value: 4, icon: <Share2 className="h-4 w-4" /> },
+    { title: "Organic Traffic", value: 34, icon: <Search className="h-4 w-4" /> },
   ]
 
   // Animation variants for staggered animations
@@ -57,7 +57,7 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-3xl font-bold tracking-tight text-transparent md:text-4xl"
           >
-            Cloudsine Dashboard
+            Video Pulse Dashboard
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: -20 }}
@@ -121,23 +121,7 @@ export default function Dashboard() {
         </motion.div>
         */}
 
-        {/* Organic Traffic Target Section */}
-        <div className="container mx-auto px-4 py-8">
-          <h2 className="mb-4 text-2xl font-bold">
-            Organic Traffic Target&nbsp;
-            <span className="text-sm text-muted-foreground">(Tentative)</span>
-          </h2>
-          <div className="flex flex-col gap-8 md:flex-row">
-            {/* Traffic Graph */}
-            <div className="flex-1">
-              <TrafficGraph />
-            </div>
-            {/* Traffic Blocks */}
-            <div className="w-full md:w-1/3">
-              <TrafficBlocks />
-            </div>
-          </div>
-        </div>
+      
 
         {/* Blog Section */}
         <motion.div

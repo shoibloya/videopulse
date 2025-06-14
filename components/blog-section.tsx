@@ -15,11 +15,22 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { outlines } from "@/lib/outline";          /* ← NEW */
 
-const COMPANY_NAME = "Cloudsine";
+const COMPANY_NAME = "VideoPulse";
 
-// Sample blog data - replace with your actual data source
-const seedPosts = [{}]
+/* outlines from outline.ts → convert to seed-compatible items          */
+const seedPosts = outlines.map((o, idx) => ({
+  id: idx + 5,   // unique numeric id
+  title: o.articleTitle,
+  excerpt: "Blog outline",
+  imageUrl: "/outline.png",             // as requested
+  date: o.date,
+  readTime: "N/A",
+  url: `/${o.slug}`,
+  status: "pending",
+}));
+
 
 type BlogCore = (typeof seedPosts)[number];
 type BlogPost = BlogCore & { key: string };
@@ -40,14 +51,11 @@ export function BlogSection() {
       setPosts(loaded);
 
       /* seed once */
-     seedPosts.forEach((p) => {
-  if (!loaded.some((l) => l.id === p.id)) {
-    set(
-      child(listRef, String(p.id)),
-      { ...p, date: String(p.date) }   // guarantee it’s a plain string
-    );
-  }
-});
+      seedPosts.forEach((p) => {
+        if (!loaded.some((l) => l.id === p.id)) {
+          set(child(listRef, String(p.id)), p);
+        }
+      });
     });
 
     return () => unsub();
@@ -111,7 +119,13 @@ export function BlogSection() {
 
             <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3" />
-              <span>{post.date}</span>
+              <span>
+                {new Intl.DateTimeFormat("en-GB", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                }).format(new Date(post.date))}
+              </span>
             </div>
             <span>•</span>
             <span>{post.readTime}</span>
@@ -210,4 +224,3 @@ function Empty({ state }: { state: "published" | "pending" }) {
     </div>
   );
 }
-

@@ -38,7 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const COMPANY_NAME = "Cloudsine";
+const COMPANY_NAME = "VideoPulse";
 
 export default function EditBlogPage() {
   const router = useRouter();
