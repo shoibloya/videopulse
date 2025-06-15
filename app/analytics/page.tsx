@@ -13,7 +13,6 @@ import { format } from "date-fns"
 import {
   BLOG_URLS,
   BLOG_REPORTS,
-  isReportReady,
 } from "@/lib/blogPosts"
 import {
   Card,
@@ -62,35 +61,25 @@ import {
   RefreshCw,
   TrendingUp,
   FileText,
+  Gauge,
+  LayoutList,
 } from "lucide-react"
 
+/* ---------- types ---------- */
 type SiteEntry = { siteUrl: string; displayName: string }
 type DailyRow = { date: string; clicks: number; impressions: number }
 type QueryRow = { query: string; clicks: number; impressions: number }
+type PageRow  = { page: string; clicks: number; impressions: number }
+type Summary  = { clicks: number; impressions: number; ctr: number; position: number }
 
+/* ---------- helpers ---------- */
 const COLORS = {
   clicks: "#7c3aed",
   impressions: "#10b981",
   grid: "#e2e8f0",
 }
-
 const formatDateLabel = (yyyymmdd: string) =>
   `${yyyymmdd.slice(4, 6)}/${yyyymmdd.slice(6, 8)}`
-
-const buildFilter = (page: string) => ({
-  dimensionFilterGroups: [
-    {
-      groupType: "and",
-      filters: [
-        {
-          dimension: "page",
-          operator: "equals",
-          expression: page,
-        },
-      ],
-    },
-  ],
-})
 
 const normaliseSiteUrl = (id: string) =>
   id.startsWith("sc-domain:")
@@ -99,7 +88,27 @@ const normaliseSiteUrl = (id: string) =>
     ? id
     : id + "/"
 
-const ReportTab = ({ url }: { url: string }) => {
+const buildFilter = (page: string | null) =>
+  page
+    ? {
+        dimensionFilterGroups: [
+          {
+            groupType: "and",
+            filters: [
+              {
+                dimension: "page",
+                operator: "equals",
+                expression: page,
+              },
+            ],
+          },
+        ],
+      }
+    : {}
+
+/* ---------- lazily-loaded blog report ---------- */
+const ReportTab = ({ url }: { url: string | null }) => {
+  if (!url) return <p className="text-center py-10 text-gray-600">No report in “All pages” view.</p>
   const loader = BLOG_REPORTS[url]
   if (!loader) {
     return (
@@ -116,18 +125,26 @@ const ReportTab = ({ url }: { url: string }) => {
   )
 }
 
+/* ---------- main component ---------- */
 export default function AnalyticsPage() {
-  const [token, setToken] = useState<string | null>(null)
-  const [sites, setSites] = useState<SiteEntry[]>([])
+  /* ----- state ----- */
+  const [token,   setToken]   = useState<string | null>(null)
+  const [sites,   setSites]   = useState<SiteEntry[]>([])
   const [siteUrl, setSiteUrl] = useState<string | null>(null)
-  const [blog, setBlog] = useState<string | null>(null)
-  const [start, setStart] = useState<Date>(() => new Date(2025, 2, 1))
-  const [end, setEnd] = useState<Date>(() => new Date())
-  const [daily, setDaily] = useState<DailyRow[]>([])
-  const [queries, setQueries] = useState<QueryRow[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
+  const [page, setPage]   = useState<string | null>(null)           // null  -> All pages
+  const [start, setStart] = useState<Date>(() => new Date(2025, 2, 1))
+  const [end,   setEnd]   = useState<Date>(() => new Date())
+
+  const [summary, setSummary] = useState<Summary | null>(null)
+  const [daily,   setDaily]   = useState<DailyRow[]>([])
+  const [queries, setQueries] = useState<QueryRow[]>([])
+  const [pages,   setPages]   = useState<PageRow[]>([])
+
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
+
+  /* ----- Google sign-in ----- */
   const signIn = useCallback(() => {
     if (!window.google?.accounts?.oauth2) return
     const client = window.google.accounts.oauth2.initTokenClient({
@@ -143,13 +160,13 @@ export default function AnalyticsPage() {
     client.requestAccessToken()
   }, [])
 
+  /* ----- list Search Console properties ----- */
   const listSites = useCallback(async () => {
     if (!token) return
     try {
-      const res = await fetch(
-        "https://searchconsole.googleapis.com/webmasters/v3/sites",
-        { headers: { Authorization: `Bearer ${token}` } },
-      )
+      const res  = await fetch("https://searchconsole.googleapis.com/webmasters/v3/sites", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
       const json = await res.json()
       if (json.error) throw new Error(json.error.message)
       const entries: SiteEntry[] = (json.siteEntry ?? [])
@@ -169,26 +186,54 @@ export default function AnalyticsPage() {
     }
   }, [token])
 
-  useEffect(() => {
-    if (token) listSites()
-  }, [token, listSites])
+  useEffect(() => { if (token) listSites() }, [token, listSites])
 
-  const fetchBlog = useCallback(async () => {
-    if (!token || !siteUrl || !blog) return
+  /* ----- fetch analytics (site-wide or page-specific) ----- */
+  const fetchAnalytics = useCallback(async () => {
+    if (!token || !siteUrl) return
     setLoading(true)
     setError(null)
+
     const api = `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(
       normaliseSiteUrl(siteUrl),
     )}/searchAnalytics/query`
     const startDate = format(start, "yyyy-MM-dd")
-    const endDate = format(end, "yyyy-MM-dd")
+    const endDate   = format(end,   "yyyy-MM-dd")
+
     try {
+      /* 1️⃣ aggregate summary row (clicks / impressions / ctr / position) */
+      const summaryBody = {
+        startDate,
+        endDate,
+        rowLimit: 1,
+        ...buildFilter(page),
+      }
+      const summaryJson = await (
+        await fetch(api, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(summaryBody),
+        })
+      ).json()
+      if (summaryJson.error) throw new Error(summaryJson.error.message)
+      const sRow = summaryJson.rows?.[0] ?? { clicks:0, impressions:0, ctr:0, position:0 }
+      setSummary({
+        clicks: sRow.clicks,
+        impressions: sRow.impressions,
+        ctr: sRow.ctr,
+        position: sRow.position,
+      })
+
+      /* 2️⃣ daily trend */
       const dailyBody = {
         startDate,
         endDate,
         dimensions: ["date"],
         rowLimit: 1000,
-        ...buildFilter(blog),
+        ...buildFilter(page),
       }
       const dailyJson = await (
         await fetch(api, {
@@ -206,13 +251,16 @@ export default function AnalyticsPage() {
         clicks: r.clicks,
         impressions: r.impressions,
       }))
+      setDaily(dailyRows.sort((a, b) => a.date.localeCompare(b.date)))
+
+      /* 3️⃣ top queries */
       const queryBody = {
         startDate,
         endDate,
         dimensions: ["query"],
         rowLimit: 25,
         orderBy: [{ field: "clicks", desc: true }],
-        ...buildFilter(blog),
+        ...buildFilter(page),
       }
       const queryJson = await (
         await fetch(api, {
@@ -230,37 +278,67 @@ export default function AnalyticsPage() {
         clicks: r.clicks,
         impressions: r.impressions,
       }))
-      setDaily(dailyRows.sort((a, b) => a.date.localeCompare(b.date)))
       setQueries(queryRows)
+
+      /* 4️⃣ top pages (site-wide only) */
+      if (!page) {
+        const pageBody = {
+          startDate,
+          endDate,
+          dimensions: ["page"],
+          rowLimit: 25,
+          orderBy: [{ field: "clicks", desc: true }],
+        }
+        const pageJson = await (
+          await fetch(api, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(pageBody),
+          })
+        ).json()
+        if (pageJson.error) throw new Error(pageJson.error.message)
+        const pageRows: PageRow[] = (pageJson.rows ?? []).map((r: any) => ({
+          page: r.keys[0],
+          clicks: r.clicks,
+          impressions: r.impressions,
+        }))
+        setPages(pageRows)
+      } else {
+        setPages([])
+      }
     } catch (e: any) {
-      setError(e.message ?? "Failed to fetch blog analytics.")
+      setError(e.message ?? "Failed to fetch analytics.")
     } finally {
       setLoading(false)
     }
-  }, [token, siteUrl, blog, start, end])
+  }, [token, siteUrl, page, start, end])
 
-  useEffect(() => {
-    fetchBlog()
-  }, [fetchBlog])
+  /* auto-refresh when deps change */
+  useEffect(() => { fetchAnalytics() }, [fetchAnalytics])
 
-  const totalClicks = daily.reduce((t, d) => t + d.clicks, 0)
-  const totalImpressions = daily.reduce((t, d) => t + d.impressions, 0)
+  /* ----- derived totals ----- */
+  const totalClicks      = summary?.clicks      ?? 0
+  const totalImpressions = summary?.impressions ?? 0
+  const avgCTR           = summary ? (summary.ctr * 100).toFixed(2) : "0.00"
+  const avgPosition      = summary ? summary.position.toFixed(1)     : "—"
 
+  /* ----- tooltip component ----- */
   const TooltipBox = ({ active, payload, label }: any) =>
     active && payload?.length ? (
       <div className="bg-white p-3 border rounded-lg shadow-lg">
         <p className="font-medium text-gray-900 mb-1">{label}</p>
         {payload.map((e: any, i: number) => (
           <p key={i} style={{ color: e.color }} className="text-sm">
-            {e.name}:{" "}
-            <span className="font-semibold">
-              {e.value.toLocaleString()}
-            </span>
+            {e.name}: <span className="font-semibold">{e.value.toLocaleString()}</span>
           </p>
         ))}
       </div>
     ) : null
 
+  /* ---------- UI ---------- */
   return (
     <>
       <Script
@@ -269,6 +347,7 @@ export default function AnalyticsPage() {
       />
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
         <div className="container mx-auto max-w-7xl px-4 py-8">
+          {/* ----- header / auth ----- */}
           <header className="mb-8">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-violet-100 rounded-lg">
@@ -276,13 +355,15 @@ export default function AnalyticsPage() {
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">
-                  Blog Analytics
+                  Search Console Analytics
                 </h1>
                 <p className="text-gray-600">
-                  Google Search Console Dashboard
+                  Site &amp; Blog Performance Dashboard
                 </p>
               </div>
             </div>
+
+            {/* sign-in card */}
             {!token && (
               <Card className="max-w-md">
                 <CardContent className="pt-6">
@@ -295,8 +376,7 @@ export default function AnalyticsPage() {
                         Connect Your Account
                       </h3>
                       <p className="text-gray-600 text-sm mb-4">
-                        Sign in with Google to access your Search Console
-                        data
+                        Sign in with Google to access your Search Console data
                       </p>
                     </div>
                     <Button onClick={signIn} className="w-full">
@@ -306,9 +386,12 @@ export default function AnalyticsPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* property / page selectors */}
             {token && (
               <Card className="p-4">
                 <div className="flex flex-wrap gap-3 items-center">
+                  {/* property */}
                   <div className="space-y-1">
                     <label className="text-sm font-medium text-gray-700">
                       Property
@@ -317,7 +400,7 @@ export default function AnalyticsPage() {
                       value={siteUrl ?? undefined}
                       onValueChange={(v) => {
                         setSiteUrl(v)
-                        setBlog(null)
+                        setPage(null)        // reset to “All pages”
                       }}
                     >
                       <SelectTrigger className="w-[280px]">
@@ -332,19 +415,22 @@ export default function AnalyticsPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* page / blog selector */}
                   <div className="space-y-1">
                     <label className="text-sm font-medium text-gray-700">
-                      Blog Post
+                      Page
                     </label>
                     <Select
                       disabled={!siteUrl}
-                      value={blog ?? undefined}
-                      onValueChange={setBlog}
+                      value={page ?? ""}
+                      onValueChange={(v) => setPage(v || null)}
                     >
                       <SelectTrigger className="w-[420px]">
-                        <SelectValue placeholder="Choose blog post" />
+                        <SelectValue placeholder="All pages" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="">All pages</SelectItem>
                         {BLOG_URLS.map((u) => (
                           <SelectItem key={u} value={u}>
                             {u.replace(/^https?:\/\//, "")}
@@ -353,133 +439,86 @@ export default function AnalyticsPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* date pickers */}
                   <div className="flex gap-2">
-                    <DatePicker
-                      label="Start"
-                      date={start}
-                      setDate={setStart}
-                    />
-                    <DatePicker
-                      label="End"
-                      date={end}
-                      setDate={setEnd}
-                    />
+                    <DatePicker label="Start" date={start} setDate={setStart} />
+                    <DatePicker label="End"   date={end}   setDate={setEnd}   />
                   </div>
+
+                  {/* refresh */}
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={fetchBlog}
-                    disabled={loading || !blog}
+                    onClick={fetchAnalytics}
+                    disabled={loading}
                     className="flex items-center gap-2 mt-6"
                   >
-                    <RefreshCw
-                      className={`h-4 w-4 ${
-                        loading ? "animate-spin" : ""
-                      }`}
-                    />
+                    <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                     {loading ? "Loading..." : "Refresh"}
                   </Button>
                 </div>
               </Card>
             )}
           </header>
-          {token && !siteUrl && (
-            <Card className="text-center py-8">
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="p-3 bg-gray-100 rounded-full w-fit mx-auto">
-                    <LineChartIcon className="h-8 w-8 text-gray-600" />
-                  </div>
-                  <p className="text-gray-600">
-                    Select a property to begin analyzing your data.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          {token && siteUrl && !blog && (
-            <Card className="text-center py-8">
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="p-3 bg-blue-100 rounded-full w-fit mx-auto">
-                    <Eye className="h-8 w-8 text-blue-600" />
-                  </div>
-                  <p className="text-gray-600">
-                    Select one of your blog URLs to load analytics.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          {token && siteUrl && blog && (
+
+          {/* ----- analytics section ----- */}
+          {token && siteUrl && (
             <>
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 mb-8">
-                <Card className="relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-20 h-20 bg-violet-500/10 rounded-full -mr-10 -mt-10"></div>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex gap-2 items-center text-sm text-gray-600 font-medium">
-                      <Users className="h-4 w-4 text-violet-600" /> Total Clicks
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {loading ? (
-                      <Skeleton className="h-8 w-24" />
-                    ) : (
-                      <p className="text-3xl font-bold text-gray-900">
-                        {totalClicks.toLocaleString()}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-                <Card className="relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/10 rounded-full -mr-10 -mt-10"></div>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex gap-2 items-center text-sm text-gray-600 font-medium">
-                      <Eye className="h-4 w-4 text-emerald-600" /> Total Impressions
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {loading ? (
-                      <Skeleton className="h-8 w-24" />
-                    ) : (
-                      <p className="text-3xl font-bold text-gray-900">
-                        {totalImpressions.toLocaleString()}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-                <Card className="relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-20 h-20 bg-orange-500/10 rounded-full -mr-10 -mt-10"></div>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex gap-2 items-center text-sm text-gray-600 font-medium">
-                      <TrendingUp className="h-4 w-4 text-orange-600" /> Click-Through Rate
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {loading ? (
-                      <Skeleton className="h-8 w-24" />
-                    ) : (
-                      <p className="text-3xl font-bold text-gray-900">
-                        {totalImpressions
-                          ? ((totalClicks / totalImpressions) * 100).toFixed(2) + "%"
-                          : "0.00%"}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
+              {/* summary cards */}
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+                {/* clicks */}
+                <SummaryCard
+                  loading={loading}
+                  title="Total Clicks"
+                  value={totalClicks.toLocaleString()}
+                  icon={<Users className="h-4 w-4 text-violet-600" />}
+                  bg="violet-500"
+                />
+                {/* impressions */}
+                <SummaryCard
+                  loading={loading}
+                  title="Total Impressions"
+                  value={totalImpressions.toLocaleString()}
+                  icon={<Eye className="h-4 w-4 text-emerald-600" />}
+                  bg="emerald-500"
+                />
+                {/* ctr */}
+                <SummaryCard
+                  loading={loading}
+                  title="Click-Through Rate"
+                  value={`${avgCTR}%`}
+                  icon={<TrendingUp className="h-4 w-4 text-orange-600" />}
+                  bg="orange-500"
+                />
+                {/* position */}
+                <SummaryCard
+                  loading={loading}
+                  title="Average Position"
+                  value={avgPosition}
+                  icon={<Gauge className="h-4 w-4 text-sky-600" />}
+                  bg="sky-500"
+                />
               </div>
+
+              {/* detail tabs */}
               <Tabs defaultValue="overview" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-3 lg:w-[600px]">
+                <TabsList className="grid w-full grid-cols-4 lg:w-[700px]">
                   <TabsTrigger value="overview" className="flex gap-2 items-center">
                     <LineChartIcon className="h-4 w-4" /> Overview
                   </TabsTrigger>
                   <TabsTrigger value="queries" className="flex gap-2 items-center">
                     <PieChartIcon className="h-4 w-4" /> Queries
                   </TabsTrigger>
+                  <TabsTrigger value="pages" className="flex gap-2 items-center">
+                    <LayoutList className="h-4 w-4" /> Pages
+                  </TabsTrigger>
                   <TabsTrigger value="report" className="flex gap-2 items-center">
                     <FileText className="h-4 w-4" /> Report
                   </TabsTrigger>
                 </TabsList>
+
+                {/* ----- overview ----- */}
                 <TabsContent value="overview" className="space-y-6">
                   <Card>
                     <CardHeader>
@@ -487,26 +526,21 @@ export default function AnalyticsPage() {
                         <LineChartIcon className="h-5 w-5 text-violet-600" /> Daily Performance
                       </CardTitle>
                       <CardDescription className="text-sm text-gray-600 break-all">
-                        {blog}
+                        {page ?? "All pages"}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       {loading ? (
-                        <Skeleton className="h-[320px] w-full" />
+                        <Skeleton className="h-[360px] w-full" />
                       ) : (
                         <div className="h-[360px]">
                           <ResponsiveContainer width="100%" height="100%">
-                            <LineChart
-                              data={daily.map((d) => ({
-                                ...d,
-                                date: formatDateLabel(d.date),
-                              }))}
-                            >
+                            <LineChart data={daily.map((d) => ({ ...d, date: formatDateLabel(d.date) }))}>
                               <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
                               <XAxis dataKey="date" tickLine={{ stroke: COLORS.grid }} axisLine={{ stroke: COLORS.grid }} fontSize={12} />
                               <YAxis tickLine={{ stroke: COLORS.grid }} axisLine={{ stroke: COLORS.grid }} fontSize={12} />
                               <Tooltip content={<TooltipBox />} />
-                              <Line type="monotone" dataKey="clicks" stroke={COLORS.clicks} strokeWidth={3} dot={{ r: 4, fill: COLORS.clicks }} name="Clicks" />
+                              <Line type="monotone" dataKey="clicks"      stroke={COLORS.clicks}      strokeWidth={3} dot={{ r: 4, fill: COLORS.clicks }}      name="Clicks" />
                               <Line type="monotone" dataKey="impressions" stroke={COLORS.impressions} strokeWidth={3} dot={{ r: 4, fill: COLORS.impressions }} name="Impressions" />
                             </LineChart>
                           </ResponsiveContainer>
@@ -515,73 +549,54 @@ export default function AnalyticsPage() {
                     </CardContent>
                   </Card>
                 </TabsContent>
+
+                {/* ----- queries ----- */}
                 <TabsContent value="queries">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Top Search Queries</CardTitle>
-                      <CardDescription className="break-all">
-                        {blog}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead className="border-b bg-gray-50/80 sticky top-0">
-                            <tr>
-                              <th className="px-6 py-4 text-left font-semibold text-gray-900">Query</th>
-                              <th className="px-6 py-4 text-right font-semibold text-gray-900">Clicks</th>
-                              <th className="px-6 py-4 text-right font-semibold text-gray-900">Impressions</th>
-                              <th className="px-6 py-4 text-right font-semibold text-gray-900">CTR</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {loading
-                              ? Array(8)
-                                  .fill(0)
-                                  .map((_, i) => (
-                                    <tr key={i} className="border-b border-gray-100">
-                                      <td className="px-6 py-4">
-                                        <Skeleton className="h-4 w-64" />
-                                      </td>
-                                      <td className="px-6 py-4 text-right">
-                                        <Skeleton className="h-4 w-12 ml-auto" />
-                                      </td>
-                                      <td className="px-6 py-4 text-right">
-                                        <Skeleton className="h-4 w-12 ml-auto" />
-                                      </td>
-                                      <td className="px-6 py-4 text-right">
-                                        <Skeleton className="h-4 w-12 ml-auto" />
-                                      </td>
-                                    </tr>
-                                  ))
-                              : queries.map((q, i) => (
-                                  <tr key={i} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-6 py-4 text-gray-900 font-medium max-w-xs truncate" title={q.query}>
-                                      {q.query}
-                                    </td>
-                                    <td className="px-6 py-4 text-right text-gray-900 font-semibold">
-                                      {q.clicks.toLocaleString()}
-                                    </td>
-                                    <td className="px-6 py-4 text-right text-gray-600">
-                                      {q.impressions.toLocaleString()}
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                      <Badge variant="secondary" className="font-medium">
-                                        {q.impressions ? ((q.clicks / q.impressions) * 100).toFixed(2) + "%" : "—"}
-                                      </Badge>
-                                    </td>
-                                  </tr>
-                                ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <DataTable
+                    title="Top Search Queries"
+                    loading={loading}
+                    rows={queries}
+                    getKey={(r) => r.query}
+                    cols={[
+                      { header: "Query",        render: (r) => r.query,       className: "text-gray-900 font-medium max-w-xs truncate",    numeric: false },
+                      { header: "Clicks",       render: (r) => r.clicks,      numeric: true },
+                      { header: "Impressions",  render: (r) => r.impressions, numeric: true, textClass: "text-gray-600" },
+                      { header: "CTR",          render: (r) => (r.impressions ? ((r.clicks / r.impressions) * 100).toFixed(2) + "%" : "—"), numeric: true, badge: true },
+                    ]}
+                  />
                 </TabsContent>
+
+                {/* ----- pages (only populated in site-wide view) ----- */}
+                <TabsContent value="pages">
+                  {page ? (
+                    <Card className="text-center py-8">
+                      <CardContent>
+                        <p className="text-gray-600">Switch to “All pages” to see top-performing URLs.</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <DataTable
+                      title="Top Pages"
+                      loading={loading}
+                      rows={pages}
+                      getKey={(r) => r.page}
+                      cols={[
+                        { header: "Page",         render: (r) => r.page.replace(/^https?:\/\//, ""), className: "text-gray-900 font-medium max-w-xs truncate", numeric: false },
+                        { header: "Clicks",       render: (r) => r.clicks,      numeric: true },
+                        { header: "Impressions",  render: (r) => r.impressions, numeric: true, textClass: "text-gray-600" },
+                        { header: "CTR",          render: (r) => (r.impressions ? ((r.clicks / r.impressions) * 100).toFixed(2) + "%" : "—"), numeric: true, badge: true },
+                      ]}
+                    />
+                  )}
+                </TabsContent>
+
+                {/* ----- report (blog-specific only) ----- */}
                 <TabsContent value="report">
-                  <ReportTab url={blog} />
+                  <ReportTab url={page} />
                 </TabsContent>
               </Tabs>
+
+              {/* error banner */}
               {error && (
                 <Card className="border-red-200 bg-red-50">
                   <CardContent className="pt-6">
@@ -605,11 +620,134 @@ export default function AnalyticsPage() {
   )
 }
 
-type DPProps = {
-  label: string
-  date: Date
-  setDate: (d: Date) => void
+/* ---------- reusable sub-components ---------- */
+
+/* summary card */
+function SummaryCard({
+  loading,
+  title,
+  value,
+  icon,
+  bg,
+}: {
+  loading: boolean
+  title: string
+  value: string
+  icon: React.ReactNode
+  bg: string            /* tailwind color e.g. sky-500 */
+}) {
+  return (
+    <Card className="relative overflow-hidden">
+      <div className={`absolute top-0 right-0 w-20 h-20 bg-${bg}/10 rounded-full -mr-10 -mt-10`} />
+      <CardHeader className="pb-2">
+        <CardTitle className="flex gap-2 items-center text-sm text-gray-600 font-medium">
+          {icon} {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <Skeleton className="h-8 w-24" />
+        ) : (
+          <p className="text-3xl font-bold text-gray-900">{value}</p>
+        )}
+      </CardContent>
+    </Card>
+  )
 }
+
+/* generic table for queries / pages */
+function DataTable<T>({
+  title,
+  loading,
+  rows,
+  cols,
+  getKey,
+}: {
+  title: string
+  loading: boolean
+  rows: T[]
+  cols: {
+    header: string
+    render: (r: T) => string | number
+    numeric?: boolean
+    className?: string
+    textClass?: string
+    badge?: boolean
+  }[]
+  getKey: (r: T, idx: number) => string | number
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b bg-gray-50/80 sticky top-0">
+              <tr>
+                {cols.map((c) => (
+                  <th
+                    key={c.header}
+                    className={`px-6 py-4 ${c.numeric ? "text-right" : "text-left"} font-semibold text-gray-900`}
+                  >
+                    {c.header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading
+                ? Array(8)
+                    .fill(0)
+                    .map((_, i) => (
+                      <tr key={i} className="border-b border-gray-100">
+                        {cols.map((c, j) => (
+                          <td key={j} className={`px-6 py-4 ${c.numeric ? "text-right" : ""}`}>
+                            <Skeleton className={`h-4 ${c.numeric ? "w-12 ml-auto" : "w-64"}`} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                : rows.map((r, i) => (
+                    <tr
+                      key={getKey(r, i)}
+                      className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors"
+                    >
+                      {cols.map((c, j) => {
+                        const content = c.render(r)
+                        return (
+                          <td
+                            key={j}
+                            className={`px-6 py-4 ${c.numeric ? "text-right" : ""} ${c.textClass ?? ""}`}
+                          >
+                            {c.badge ? (
+                              <Badge variant="secondary" className="font-medium">
+                                {content}
+                              </Badge>
+                            ) : (
+                              <span
+                                className={`${c.className ?? ""}`}
+                                title={typeof content === "string" ? content : undefined}
+                              >
+                                {content}
+                              </span>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/* date picker */
+type DPProps = { label: string; date: Date; setDate: (d: Date) => void }
 function DatePicker({ label, date, setDate }: DPProps) {
   return (
     <div className="space-y-1">
@@ -622,7 +760,12 @@ function DatePicker({ label, date, setDate }: DPProps) {
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
-          <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} initialFocus />
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={(d) => d && setDate(d)}
+            initialFocus
+          />
         </PopoverContent>
       </Popover>
     </div>
