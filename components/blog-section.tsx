@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { outlines } from "@/lib/outline";          /* ← NEW */
 
-const COMPANY_NAME = "VideoPulse";
+const COMPANY_NAME = "VideoPulse"; 
 
 /* outlines from outline.ts → convert to seed-compatible items          */
 const seedPosts = outlines.map((o, idx) => ({
@@ -30,7 +30,6 @@ const seedPosts = outlines.map((o, idx) => ({
   url: `/${o.slug}`,
   status: "pending",
 }));
-
 
 type BlogCore = (typeof seedPosts)[number];
 type BlogPost = BlogCore & { key: string };
@@ -51,11 +50,14 @@ export function BlogSection() {
       setPosts(loaded);
 
       /* seed once */
-      seedPosts.forEach((p) => {
-        if (!loaded.some((l) => l.id === p.id)) {
-          set(child(listRef, String(p.id)), p);
-        }
-      });
+     seedPosts.forEach((p) => {
+  if (!loaded.some((l) => l.id === p.id)) {
+    set(
+      child(listRef, String(p.id)),
+      { ...p, date: String(p.date) }   // guarantee it’s a plain string
+    );
+  }
+});
     });
 
     return () => unsub();
@@ -119,13 +121,7 @@ export function BlogSection() {
 
             <div className="flex items-center gap-1">
               <Calendar className="h-3 w-3" />
-              <span>
-                {new Intl.DateTimeFormat("en-GB", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                }).format(new Date(post.date))}
-              </span>
+              <span>{post.date}</span>
             </div>
             <span>•</span>
             <span>{post.readTime}</span>
