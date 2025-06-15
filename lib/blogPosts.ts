@@ -11,10 +11,7 @@
 
  /* ─────────────────────────── 1. URL list (order preserved) */
  export const BLOG_URLS: string[] = [
-   "https://www.cloudsine.tech/how-to-secure-your-retrieval-augmented-generation-rag-applications/",
-   "https://www.cloudsine.tech/making-sense-of-ai-security-frameworks-owasp-mitre-atlas-and-the-nist-rmf/",
-   "https://www.cloudsine.tech/llm-vulnerabilities-8-critical-threats-and-how-to-mitigate-them/",
-   "https://www.cloudsine.tech/detecting-and-defending-against-adversarial-prompts-in-generative-ai-systems/",
+  
  ]
  
  /* ─────────────────────────── 2. Report mapping
