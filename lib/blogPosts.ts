@@ -11,7 +11,7 @@
 
  /* ─────────────────────────── 1. URL list (order preserved) */
  export const BLOG_URLS: string[] = [
-   "https://www.cloudsine.tech/how-to-secure-your-retrieval-augmented-generation-rag-applications/",
+   
  ]
  
  /* ─────────────────────────── 2. Report mapping
