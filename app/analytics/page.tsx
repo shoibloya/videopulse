@@ -65,19 +65,21 @@ import {
   LayoutList,
 } from "lucide-react"
 
-/* ---------- types ---------- */
-type SiteEntry = { siteUrl: string; displayName: string }
-type DailyRow = { date: string; clicks: number; impressions: number }
-type QueryRow = { query: string; clicks: number; impressions: number }
-type PageRow  = { page: string; clicks: number; impressions: number }
-type Summary  = { clicks: number; impressions: number; ctr: number; position: number }
-
-/* ---------- helpers ---------- */
+/* ---------- constants & types ---------- */
 const COLORS = {
   clicks: "#7c3aed",
   impressions: "#10b981",
   grid: "#e2e8f0",
 }
+const ALL_PAGES = "__ALL__"          // 👈 sentinel for “All pages”
+
+type SiteEntry = { siteUrl: string; displayName: string }
+type DailyRow  = { date: string; clicks: number; impressions: number }
+type QueryRow  = { query: string; clicks: number; impressions: number }
+type PageRow   = { page: string;  clicks: number; impressions: number }
+type Summary   = { clicks: number; impressions: number; ctr: number; position: number }
+
+/* ---------- helpers ---------- */
 const formatDateLabel = (yyyymmdd: string) =>
   `${yyyymmdd.slice(4, 6)}/${yyyymmdd.slice(6, 8)}`
 
@@ -95,28 +97,18 @@ const buildFilter = (page: string | null) =>
           {
             groupType: "and",
             filters: [
-              {
-                dimension: "page",
-                operator: "equals",
-                expression: page,
-              },
+              { dimension: "page", operator: "equals", expression: page },
             ],
           },
         ],
       }
     : {}
 
-/* ---------- lazily-loaded blog report ---------- */
+/* ---------- lazy-loaded blog report ---------- */
 const ReportTab = ({ url }: { url: string | null }) => {
   if (!url) return <p className="text-center py-10 text-gray-600">No report in “All pages” view.</p>
   const loader = BLOG_REPORTS[url]
-  if (!loader) {
-    return (
-      <p className="text-center py-10 text-gray-600">
-        Report coming soon 🚧
-      </p>
-    )
-  }
+  if (!loader) return <p className="text-center py-10 text-gray-600">Report coming soon 🚧</p>
   const Report = lazy(loader)
   return (
     <Suspense fallback={<p className="text-center py-10">Loading report…</p>}>
@@ -125,14 +117,14 @@ const ReportTab = ({ url }: { url: string | null }) => {
   )
 }
 
-/* ---------- main component ---------- */
+/* ---------- main ---------- */
 export default function AnalyticsPage() {
   /* ----- state ----- */
   const [token,   setToken]   = useState<string | null>(null)
   const [sites,   setSites]   = useState<SiteEntry[]>([])
   const [siteUrl, setSiteUrl] = useState<string | null>(null)
 
-  const [page, setPage]   = useState<string | null>(null)           // null  -> All pages
+  const [page, setPage] = useState<string | null>(null)    // null → All pages
   const [start, setStart] = useState<Date>(() => new Date(2025, 2, 1))
   const [end,   setEnd]   = useState<Date>(() => new Date())
 
@@ -153,9 +145,7 @@ export default function AnalyticsPage() {
         "https://www.googleapis.com/auth/webmasters.readonly openid email profile",
       prompt: "",
       callback: (resp: any) =>
-        resp.access_token
-          ? setToken(resp.access_token)
-          : setError("Login cancelled or failed."),
+        resp.access_token ? setToken(resp.access_token) : setError("Login cancelled or failed."),
     })
     client.requestAccessToken()
   }, [])
@@ -170,9 +160,7 @@ export default function AnalyticsPage() {
       const json = await res.json()
       if (json.error) throw new Error(json.error.message)
       const entries: SiteEntry[] = (json.siteEntry ?? [])
-        .filter((s: any) =>
-          ["siteOwner", "siteFullUser"].includes(s.permissionLevel),
-        )
+        .filter((s: any) => ["siteOwner", "siteFullUser"].includes(s.permissionLevel))
         .map((s: any) => {
           const { siteUrl } = s
           const displayName = siteUrl.startsWith("sc-domain:")
@@ -185,10 +173,9 @@ export default function AnalyticsPage() {
       setError(e.message ?? "Could not list sites.")
     }
   }, [token])
-
   useEffect(() => { if (token) listSites() }, [token, listSites])
 
-  /* ----- fetch analytics (site-wide or page-specific) ----- */
+  /* ----- fetch analytics ----- */
   const fetchAnalytics = useCallback(async () => {
     if (!token || !siteUrl) return
     setLoading(true)
@@ -201,110 +188,47 @@ export default function AnalyticsPage() {
     const endDate   = format(end,   "yyyy-MM-dd")
 
     try {
-      /* 1️⃣ aggregate summary row (clicks / impressions / ctr / position) */
-      const summaryBody = {
-        startDate,
-        endDate,
-        rowLimit: 1,
-        ...buildFilter(page),
-      }
+      /* 1️⃣ summary */
+      const summaryBody = { startDate, endDate, rowLimit: 1, ...buildFilter(page) }
       const summaryJson = await (
         await fetch(api, {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify(summaryBody),
         })
       ).json()
       if (summaryJson.error) throw new Error(summaryJson.error.message)
       const sRow = summaryJson.rows?.[0] ?? { clicks:0, impressions:0, ctr:0, position:0 }
-      setSummary({
-        clicks: sRow.clicks,
-        impressions: sRow.impressions,
-        ctr: sRow.ctr,
-        position: sRow.position,
-      })
+      setSummary({ clicks:sRow.clicks, impressions:sRow.impressions, ctr:sRow.ctr, position:sRow.position })
 
-      /* 2️⃣ daily trend */
-      const dailyBody = {
-        startDate,
-        endDate,
-        dimensions: ["date"],
-        rowLimit: 1000,
-        ...buildFilter(page),
-      }
+      /* 2️⃣ daily */
+      const dailyBody = { startDate, endDate, dimensions:["date"], rowLimit:1000, ...buildFilter(page) }
       const dailyJson = await (
         await fetch(api, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(dailyBody),
+          method:"POST",
+          headers:{ Authorization:`Bearer ${token}`,"Content-Type":"application/json" },
+          body:JSON.stringify(dailyBody),
         })
       ).json()
       if (dailyJson.error) throw new Error(dailyJson.error.message)
-      const dailyRows: DailyRow[] = (dailyJson.rows ?? []).map((r: any) => ({
-        date: r.keys[0].replace(/-/g, ""),
-        clicks: r.clicks,
-        impressions: r.impressions,
-      }))
-      setDaily(dailyRows.sort((a, b) => a.date.localeCompare(b.date)))
+      const dailyRows:DailyRow[]=(dailyJson.rows??[]).map((r:any)=>({date:r.keys[0].replace(/-/g,""),clicks:r.clicks,impressions:r.impressions}))
+      setDaily(dailyRows.sort((a,b)=>a.date.localeCompare(b.date)))
 
       /* 3️⃣ top queries */
-      const queryBody = {
-        startDate,
-        endDate,
-        dimensions: ["query"],
-        rowLimit: 25,
-        orderBy: [{ field: "clicks", desc: true }],
-        ...buildFilter(page),
-      }
+      const queryBody = { startDate,endDate,dimensions:["query"],rowLimit:25,orderBy:[{field:"clicks",desc:true}],...buildFilter(page) }
       const queryJson = await (
-        await fetch(api, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(queryBody),
-        })
+        await fetch(api,{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify(queryBody)})
       ).json()
       if (queryJson.error) throw new Error(queryJson.error.message)
-      const queryRows: QueryRow[] = (queryJson.rows ?? []).map((r: any) => ({
-        query: r.keys[0],
-        clicks: r.clicks,
-        impressions: r.impressions,
-      }))
+      const queryRows:QueryRow[]=(queryJson.rows??[]).map((r:any)=>({query:r.keys[0],clicks:r.clicks,impressions:r.impressions}))
       setQueries(queryRows)
 
       /* 4️⃣ top pages (site-wide only) */
       if (!page) {
-        const pageBody = {
-          startDate,
-          endDate,
-          dimensions: ["page"],
-          rowLimit: 25,
-          orderBy: [{ field: "clicks", desc: true }],
-        }
-        const pageJson = await (
-          await fetch(api, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(pageBody),
-          })
-        ).json()
-        if (pageJson.error) throw new Error(pageJson.error.message)
-        const pageRows: PageRow[] = (pageJson.rows ?? []).map((r: any) => ({
-          page: r.keys[0],
-          clicks: r.clicks,
-          impressions: r.impressions,
-        }))
+        const pageBody={startDate,endDate,dimensions:["page"],rowLimit:25,orderBy:[{field:"clicks",desc:true}]}
+        const pageJson=await(await fetch(api,{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify(pageBody)})).json()
+        if(pageJson.error)throw new Error(pageJson.error.message)
+        const pageRows:PageRow[]=(pageJson.rows??[]).map((r:any)=>({page:r.keys[0],clicks:r.clicks,impressions:r.impressions}))
         setPages(pageRows)
       } else {
         setPages([])
@@ -315,17 +239,15 @@ export default function AnalyticsPage() {
       setLoading(false)
     }
   }, [token, siteUrl, page, start, end])
-
-  /* auto-refresh when deps change */
   useEffect(() => { fetchAnalytics() }, [fetchAnalytics])
 
-  /* ----- derived totals ----- */
-  const totalClicks      = summary?.clicks      ?? 0
-  const totalImpressions = summary?.impressions ?? 0
-  const avgCTR           = summary ? (summary.ctr * 100).toFixed(2) : "0.00"
-  const avgPosition      = summary ? summary.position.toFixed(1)     : "—"
+  /* ----- derived metrics ----- */
+  const clicks   = summary?.clicks      ?? 0
+  const imps     = summary?.impressions ?? 0
+  const avgCTR   = summary ? (summary.ctr * 100).toFixed(2) : "0.00"
+  const position = summary ? summary.position.toFixed(1)     : "—"
 
-  /* ----- tooltip component ----- */
+  /* ----- tooltip ----- */
   const TooltipBox = ({ active, payload, label }: any) =>
     active && payload?.length ? (
       <div className="bg-white p-3 border rounded-lg shadow-lg">
@@ -341,29 +263,21 @@ export default function AnalyticsPage() {
   /* ---------- UI ---------- */
   return (
     <>
-      <Script
-        src="https://accounts.google.com/gsi/client"
-        strategy="beforeInteractive"
-      />
+      <Script src="https://accounts.google.com/gsi/client" strategy="beforeInteractive" />
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
         <div className="container mx-auto max-w-7xl px-4 py-8">
-          {/* ----- header / auth ----- */}
+          {/* header */}
           <header className="mb-8">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-violet-100 rounded-lg">
                 <TrendingUp className="h-6 w-6 text-violet-600" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  Search Console Analytics
-                </h1>
-                <p className="text-gray-600">
-                  Site &amp; Blog Performance Dashboard
-                </p>
+                <h1 className="text-3xl font-bold text-gray-900">Search Console Analytics</h1>
+                <p className="text-gray-600">Site &amp; Blog Performance Dashboard</p>
               </div>
             </div>
 
-            {/* sign-in card */}
             {!token && (
               <Card className="max-w-md">
                 <CardContent className="pt-6">
@@ -372,75 +286,59 @@ export default function AnalyticsPage() {
                       <Users className="h-8 w-8 text-blue-600" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-lg mb-2">
-                        Connect Your Account
-                      </h3>
+                      <h3 className="font-semibold text-lg mb-2">Connect Your Account</h3>
                       <p className="text-gray-600 text-sm mb-4">
                         Sign in with Google to access your Search Console data
                       </p>
                     </div>
-                    <Button onClick={signIn} className="w-full">
-                      Sign in with Google
-                    </Button>
+                    <Button onClick={signIn} className="w-full">Sign in with Google</Button>
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* property / page selectors */}
             {token && (
               <Card className="p-4">
                 <div className="flex flex-wrap gap-3 items-center">
                   {/* property */}
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">
-                      Property
-                    </label>
+                    <label className="text-sm font-medium text-gray-700">Property</label>
                     <Select
                       value={siteUrl ?? undefined}
-                      onValueChange={(v) => {
-                        setSiteUrl(v)
-                        setPage(null)        // reset to “All pages”
-                      }}
+                      onValueChange={(v) => { setSiteUrl(v); setPage(null) }}   // reset to All pages
                     >
                       <SelectTrigger className="w-[280px]">
                         <SelectValue placeholder="Choose Search Console property" />
                       </SelectTrigger>
                       <SelectContent>
                         {sites.map((s) => (
-                          <SelectItem key={s.siteUrl} value={s.siteUrl}>
-                            {s.displayName}
-                          </SelectItem>
+                          <SelectItem key={s.siteUrl} value={s.siteUrl}>{s.displayName}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {/* page / blog selector */}
+                  {/* page */}
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-gray-700">
-                      Page
-                    </label>
+                    <label className="text-sm font-medium text-gray-700">Page</label>
                     <Select
                       disabled={!siteUrl}
-                      value={page ?? ""}
-                      onValueChange={(v) => setPage(v || null)}
+                      value={page ?? ALL_PAGES}
+                      onValueChange={(v) => setPage(v === ALL_PAGES ? null : v)}
                     >
                       <SelectTrigger className="w-[420px]">
                         <SelectValue placeholder="All pages" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">All pages</SelectItem>
+                        <SelectItem value={ALL_PAGES}>All pages</SelectItem>
                         {BLOG_URLS.map((u) => (
-                          <SelectItem key={u} value={u}>
-                            {u.replace(/^https?:\/\//, "")}
-                          </SelectItem>
+                          <SelectItem key={u} value={u}>{u.replace(/^https?:\/\//, "")}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {/* date pickers */}
+                  {/* dates */}
                   <div className="flex gap-2">
                     <DatePicker label="Start" date={start} setDate={setStart} />
                     <DatePicker label="End"   date={end}   setDate={setEnd}   />
@@ -462,46 +360,18 @@ export default function AnalyticsPage() {
             )}
           </header>
 
-          {/* ----- analytics section ----- */}
+          {/* analytics */}
           {token && siteUrl && (
             <>
-              {/* summary cards */}
+              {/* KPI cards */}
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-                {/* clicks */}
-                <SummaryCard
-                  loading={loading}
-                  title="Total Clicks"
-                  value={totalClicks.toLocaleString()}
-                  icon={<Users className="h-4 w-4 text-violet-600" />}
-                  bg="violet-500"
-                />
-                {/* impressions */}
-                <SummaryCard
-                  loading={loading}
-                  title="Total Impressions"
-                  value={totalImpressions.toLocaleString()}
-                  icon={<Eye className="h-4 w-4 text-emerald-600" />}
-                  bg="emerald-500"
-                />
-                {/* ctr */}
-                <SummaryCard
-                  loading={loading}
-                  title="Click-Through Rate"
-                  value={`${avgCTR}%`}
-                  icon={<TrendingUp className="h-4 w-4 text-orange-600" />}
-                  bg="orange-500"
-                />
-                {/* position */}
-                <SummaryCard
-                  loading={loading}
-                  title="Average Position"
-                  value={avgPosition}
-                  icon={<Gauge className="h-4 w-4 text-sky-600" />}
-                  bg="sky-500"
-                />
+                <SummaryCard loading={loading} title="Total Clicks"        value={clicks.toLocaleString()}  icon={<Users     className="h-4 w-4 text-violet-600" />}  bg="violet-500" />
+                <SummaryCard loading={loading} title="Total Impressions"  value={imps.toLocaleString()}    icon={<Eye       className="h-4 w-4 text-emerald-600" />} bg="emerald-500" />
+                <SummaryCard loading={loading} title="Click-Through Rate" value={`${avgCTR}%`}              icon={<TrendingUp className="h-4 w-4 text-orange-600" />} bg="orange-500" />
+                <SummaryCard loading={loading} title="Average Position"   value={position}                  icon={<Gauge     className="h-4 w-4 text-sky-600" />}    bg="sky-500" />
               </div>
 
-              {/* detail tabs */}
+              {/* tabs */}
               <Tabs defaultValue="overview" className="space-y-6">
                 <TabsList className="grid w-full grid-cols-4 lg:w-[700px]">
                   <TabsTrigger value="overview" className="flex gap-2 items-center">
@@ -518,7 +388,7 @@ export default function AnalyticsPage() {
                   </TabsTrigger>
                 </TabsList>
 
-                {/* ----- overview ----- */}
+                {/* overview */}
                 <TabsContent value="overview" className="space-y-6">
                   <Card>
                     <CardHeader>
@@ -540,8 +410,8 @@ export default function AnalyticsPage() {
                               <XAxis dataKey="date" tickLine={{ stroke: COLORS.grid }} axisLine={{ stroke: COLORS.grid }} fontSize={12} />
                               <YAxis tickLine={{ stroke: COLORS.grid }} axisLine={{ stroke: COLORS.grid }} fontSize={12} />
                               <Tooltip content={<TooltipBox />} />
-                              <Line type="monotone" dataKey="clicks"      stroke={COLORS.clicks}      strokeWidth={3} dot={{ r: 4, fill: COLORS.clicks }}      name="Clicks" />
-                              <Line type="monotone" dataKey="impressions" stroke={COLORS.impressions} strokeWidth={3} dot={{ r: 4, fill: COLORS.impressions }} name="Impressions" />
+                              <Line type="monotone" dataKey="clicks"      stroke={COLORS.clicks}      strokeWidth={3} dot={{ r:4, fill:COLORS.clicks }}      name="Clicks" />
+                              <Line type="monotone" dataKey="impressions" stroke={COLORS.impressions} strokeWidth={3} dot={{ r:4, fill:COLORS.impressions }} name="Impressions" />
                             </LineChart>
                           </ResponsiveContainer>
                         </div>
@@ -550,7 +420,7 @@ export default function AnalyticsPage() {
                   </Card>
                 </TabsContent>
 
-                {/* ----- queries ----- */}
+                {/* queries */}
                 <TabsContent value="queries">
                   <DataTable
                     title="Top Search Queries"
@@ -558,15 +428,15 @@ export default function AnalyticsPage() {
                     rows={queries}
                     getKey={(r) => r.query}
                     cols={[
-                      { header: "Query",        render: (r) => r.query,       className: "text-gray-900 font-medium max-w-xs truncate",    numeric: false },
-                      { header: "Clicks",       render: (r) => r.clicks,      numeric: true },
-                      { header: "Impressions",  render: (r) => r.impressions, numeric: true, textClass: "text-gray-600" },
-                      { header: "CTR",          render: (r) => (r.impressions ? ((r.clicks / r.impressions) * 100).toFixed(2) + "%" : "—"), numeric: true, badge: true },
+                      { header:"Query",        render:(r)=>r.query,                                        className:"text-gray-900 font-medium max-w-xs truncate" },
+                      { header:"Clicks",       render:(r)=>r.clicks,      numeric:true },
+                      { header:"Impressions",  render:(r)=>r.impressions, numeric:true, textClass:"text-gray-600" },
+                      { header:"CTR",          render:(r)=>r.impressions?((r.clicks/r.impressions)*100).toFixed(2)+"%":"—", numeric:true, badge:true },
                     ]}
                   />
                 </TabsContent>
 
-                {/* ----- pages (only populated in site-wide view) ----- */}
+                {/* pages */}
                 <TabsContent value="pages">
                   {page ? (
                     <Card className="text-center py-8">
@@ -581,22 +451,22 @@ export default function AnalyticsPage() {
                       rows={pages}
                       getKey={(r) => r.page}
                       cols={[
-                        { header: "Page",         render: (r) => r.page.replace(/^https?:\/\//, ""), className: "text-gray-900 font-medium max-w-xs truncate", numeric: false },
-                        { header: "Clicks",       render: (r) => r.clicks,      numeric: true },
-                        { header: "Impressions",  render: (r) => r.impressions, numeric: true, textClass: "text-gray-600" },
-                        { header: "CTR",          render: (r) => (r.impressions ? ((r.clicks / r.impressions) * 100).toFixed(2) + "%" : "—"), numeric: true, badge: true },
+                        { header:"Page",        render:(r)=>r.page.replace(/^https?:\/\//,""), className:"text-gray-900 font-medium max-w-xs truncate" },
+                        { header:"Clicks",      render:(r)=>r.clicks,      numeric:true },
+                        { header:"Impressions", render:(r)=>r.impressions, numeric:true, textClass:"text-gray-600" },
+                        { header:"CTR",         render:(r)=>r.impressions?((r.clicks/r.impressions)*100).toFixed(2)+"%":"—", numeric:true, badge:true },
                       ]}
                     />
                   )}
                 </TabsContent>
 
-                {/* ----- report (blog-specific only) ----- */}
+                {/* report */}
                 <TabsContent value="report">
                   <ReportTab url={page} />
                 </TabsContent>
               </Tabs>
 
-              {/* error banner */}
+              {/* error */}
               {error && (
                 <Card className="border-red-200 bg-red-50">
                   <CardContent className="pt-6">
@@ -620,118 +490,60 @@ export default function AnalyticsPage() {
   )
 }
 
-/* ---------- reusable sub-components ---------- */
-
-/* summary card */
+/* ---------- sub-components ---------- */
 function SummaryCard({
-  loading,
-  title,
-  value,
-  icon,
-  bg,
-}: {
-  loading: boolean
-  title: string
-  value: string
-  icon: React.ReactNode
-  bg: string            /* tailwind color e.g. sky-500 */
-}) {
+  loading, title, value, icon, bg,
+}: { loading:boolean; title:string; value:string; icon:React.ReactNode; bg:string }) {
   return (
     <Card className="relative overflow-hidden">
       <div className={`absolute top-0 right-0 w-20 h-20 bg-${bg}/10 rounded-full -mr-10 -mt-10`} />
       <CardHeader className="pb-2">
-        <CardTitle className="flex gap-2 items-center text-sm text-gray-600 font-medium">
-          {icon} {title}
-        </CardTitle>
+        <CardTitle className="flex gap-2 items-center text-sm text-gray-600 font-medium">{icon} {title}</CardTitle>
       </CardHeader>
       <CardContent>
-        {loading ? (
-          <Skeleton className="h-8 w-24" />
-        ) : (
-          <p className="text-3xl font-bold text-gray-900">{value}</p>
-        )}
+        {loading ? <Skeleton className="h-8 w-24" /> : <p className="text-3xl font-bold text-gray-900">{value}</p>}
       </CardContent>
     </Card>
   )
 }
 
-/* generic table for queries / pages */
 function DataTable<T>({
-  title,
-  loading,
-  rows,
-  cols,
-  getKey,
+  title, loading, rows, cols, getKey,
 }: {
-  title: string
-  loading: boolean
-  rows: T[]
-  cols: {
-    header: string
-    render: (r: T) => string | number
-    numeric?: boolean
-    className?: string
-    textClass?: string
-    badge?: boolean
-  }[]
-  getKey: (r: T, idx: number) => string | number
+  title:string; loading:boolean; rows:T[];
+  cols:{ header:string; render:(r:T)=>string|number; numeric?:boolean; className?:string; textClass?:string; badge?:boolean }[];
+  getKey:(r:T,idx:number)=>string|number;
 }) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
+      <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
       <CardContent className="p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b bg-gray-50/80 sticky top-0">
-              <tr>
-                {cols.map((c) => (
-                  <th
-                    key={c.header}
-                    className={`px-6 py-4 ${c.numeric ? "text-right" : "text-left"} font-semibold text-gray-900`}
-                  >
-                    {c.header}
-                  </th>
-                ))}
-              </tr>
+              <tr>{cols.map((c)=>(<th key={c.header} className={`px-6 py-4 ${c.numeric?"text-right":"text-left"} font-semibold text-gray-900`}>{c.header}</th>))}</tr>
             </thead>
             <tbody>
               {loading
-                ? Array(8)
-                    .fill(0)
-                    .map((_, i) => (
-                      <tr key={i} className="border-b border-gray-100">
-                        {cols.map((c, j) => (
-                          <td key={j} className={`px-6 py-4 ${c.numeric ? "text-right" : ""}`}>
-                            <Skeleton className={`h-4 ${c.numeric ? "w-12 ml-auto" : "w-64"}`} />
-                          </td>
-                        ))}
-                      </tr>
-                    ))
-                : rows.map((r, i) => (
-                    <tr
-                      key={getKey(r, i)}
-                      className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors"
-                    >
-                      {cols.map((c, j) => {
-                        const content = c.render(r)
+                ? Array(8).fill(0).map((_,i)=>(
+                    <tr key={i} className="border-b border-gray-100">
+                      {cols.map((c,j)=>(
+                        <td key={j} className={`px-6 py-4 ${c.numeric?"text-right":""}`}>
+                          <Skeleton className={`h-4 ${c.numeric?"w-12 ml-auto":"w-64"}`} />
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                : rows.map((r,i)=>(
+                    <tr key={getKey(r,i)} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
+                      {cols.map((c,j)=>{
+                        const content=c.render(r)
                         return (
-                          <td
-                            key={j}
-                            className={`px-6 py-4 ${c.numeric ? "text-right" : ""} ${c.textClass ?? ""}`}
-                          >
-                            {c.badge ? (
-                              <Badge variant="secondary" className="font-medium">
-                                {content}
-                              </Badge>
-                            ) : (
-                              <span
-                                className={`${c.className ?? ""}`}
-                                title={typeof content === "string" ? content : undefined}
-                              >
-                                {content}
-                              </span>
+                          <td key={j} className={`px-6 py-4 ${c.numeric?"text-right":""} ${c.textClass??""}`}>
+                            {c.badge?(
+                              <Badge variant="secondary" className="font-medium">{content}</Badge>
+                            ):(
+                              <span className={c.className??""} title={typeof content==="string"?content:undefined}>{content}</span>
                             )}
                           </td>
                         )
@@ -746,8 +558,7 @@ function DataTable<T>({
   )
 }
 
-/* date picker */
-type DPProps = { label: string; date: Date; setDate: (d: Date) => void }
+type DPProps = { label:string; date:Date; setDate:(d:Date)=>void }
 function DatePicker({ label, date, setDate }: DPProps) {
   return (
     <div className="space-y-1">
@@ -756,16 +567,11 @@ function DatePicker({ label, date, setDate }: DPProps) {
         <PopoverTrigger asChild>
           <Button variant="outline" className="w-[160px] justify-start font-normal">
             <CalendarIcon className="mr-2 h-4 w-4" />
-            {date ? format(date, "MMM dd, yyyy") : label}
+            {date ? format(date,"MMM dd, yyyy") : label}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            mode="single"
-            selected={date}
-            onSelect={(d) => d && setDate(d)}
-            initialFocus
-          />
+          <Calendar mode="single" selected={date} onSelect={(d)=>d&&setDate(d)} initialFocus />
         </PopoverContent>
       </Popover>
     </div>
